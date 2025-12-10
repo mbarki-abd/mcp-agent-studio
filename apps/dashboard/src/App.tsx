@@ -10,10 +10,16 @@ import { Toaster } from './components/ui/toaster';
 // Import modules
 import { serversModule } from './modules/servers';
 import { agentsModule } from './modules/agents';
+import { tasksModule } from './modules/tasks';
+import { monitoringModule } from './modules/monitoring';
+import { toolsModule } from './modules/tools';
 
-// Register modules
+// Register modules (order matters for dependencies)
 moduleRegistry.register(serversModule);
 moduleRegistry.register(agentsModule);
+moduleRegistry.register(tasksModule);
+moduleRegistry.register(monitoringModule);
+moduleRegistry.register(toolsModule);
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
