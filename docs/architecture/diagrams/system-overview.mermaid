@@ -1,0 +1,44 @@
+%% MCP Agent Studio - System Overview
+%% Generated: 2025-12-10
+
+flowchart TB
+    subgraph Client["Client Layer"]
+        Browser["Browser"]
+    end
+
+    subgraph Dashboard["Dashboard (React + Vite)"]
+        direction TB
+        Core["Core"]
+        subgraph Modules["Modules"]
+            AgentsM["Agents"]
+            TasksM["Tasks"]
+            MonitoringM["Monitoring"]
+            ToolsM["Tools"]
+            ChatM["Chat"]
+        end
+        Core --> Modules
+    end
+
+    subgraph Server["API Server (Fastify)"]
+        direction TB
+        Routes["Routes"]
+        Services["Services"]
+        Prisma["Prisma ORM"]
+        Routes --> Services
+        Services --> Prisma
+    end
+
+    subgraph Data["Data Layer"]
+        PostgreSQL[("PostgreSQL")]
+        Redis[("Redis")]
+    end
+
+    subgraph External["External Services"]
+        MCPServer["MCP Server\n(cloud-mcp-server)"]
+    end
+
+    Browser --> Dashboard
+    Dashboard -- "HTTP/WS" --> Server
+    Prisma --> PostgreSQL
+    Services --> Redis
+    Server -- "API Calls" --> MCPServer

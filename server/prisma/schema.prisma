@@ -1,0 +1,421 @@
+// ============================================
+// MCP Agent Studio - Prisma Schema
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTH ====================
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           Role     @default(USER)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Relations
+  servers        ServerConfiguration[]
+  agents         Agent[]         @relation("CreatedBy")
+  validatedAgents Agent[]        @relation("ValidatedBy")
+  tasks          Task[]          @relation("TaskCreator")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  OPERATOR
+  VIEWER
+  USER
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  plan      Plan     @default(FREE)
+
+  users     User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+// ==================== SERVER CONFIG ====================
+
+model ServerConfiguration {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+
+  name            String
+  description     String?
+  url             String
+  wsUrl           String?
+
+  masterToken     String       // Encrypted
+  masterAgentId   String?
+
+  status          ServerStatus @default(UNKNOWN)
+  lastHealthCheck DateTime?
+  lastError       String?
+
+  isDefault       Boolean      @default(false)
+  autoConnect     Boolean      @default(true)
+  priority        Int          @default(0)
+
+  serverVersion   String?
+  capabilities    Json         @default("[]")
+
+  // Relations
+  agents          Agent[]
+  tasks           Task[]
+  serverTools     ServerTool[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("server_configurations")
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+  UNKNOWN
+  MAINTENANCE
+}
+
+// ==================== AGENTS ====================
+
+model Agent {
+  id              String      @id @default(uuid())
+  serverId        String
+  server          ServerConfiguration @relation(fields: [serverId], references: [id])
+
+  name            String
+  displayName     String
+  description     String?
+  role            AgentRole   @default(WORKER)
+  status          AgentStatus @default(PENDING_VALIDATION)
+
+  unixUser        String?
+  homeDir         String?
+  token           String?     // Encrypted
+
+  supervisorId    String?
+  supervisor      Agent?      @relation("AgentHierarchy", fields: [supervisorId], references: [id])
+  subordinates    Agent[]     @relation("AgentHierarchy")
+
+  capabilities    Json        @default("[]")
+
+  createdById     String
+  createdBy       User        @relation("CreatedBy", fields: [createdById], references: [id])
+  validatedById   String?
+  validatedBy     User?       @relation("ValidatedBy", fields: [validatedById], references: [id])
+  validatedAt     DateTime?
+
+  // Relations
+  tasks           Task[]
+  executions      TaskExecution[]
+  toolPermissions AgentToolPermission[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([serverId, name])
+  @@index([serverId])
+  @@index([status])
+  @@map("agents")
+}
+
+enum AgentRole {
+  MASTER
+  SUPERVISOR
+  WORKER
+}
+
+enum AgentStatus {
+  PENDING_VALIDATION
+  ACTIVE
+  INACTIVE
+  BUSY
+  ERROR
+}
+
+// ==================== TASKS ====================
+
+model Task {
+  id                   String         @id @default(uuid())
+  title                String
+  description          String?
+  priority             Priority       @default(MEDIUM)
+  status               TaskStatus     @default(DRAFT)
+
+  // Server & Project
+  serverId             String?
+  server               ServerConfiguration? @relation(fields: [serverId], references: [id])
+  projectId            String?
+
+  // Agent assignment
+  agentId              String?
+  agent                Agent?         @relation(fields: [agentId], references: [id])
+  assignmentMode       AssignmentMode @default(MANUAL)
+  requiredCapabilities Json           @default("[]")
+
+  // Prompt
+  prompt               String         @db.Text
+  promptVariables      Json           @default("{}")
+
+  // Scheduling
+  executionMode        ExecutionMode  @default(IMMEDIATE)
+  scheduledAt          DateTime?
+  recurrenceFrequency  RecurrenceFreq?
+  recurrenceInterval   Int?
+  cronExpression       String?
+  startDate            DateTime?
+  endDate              DateTime?
+  timezone             String         @default("UTC")
+
+  // Limits
+  timeout              Int?
+  maxRetries           Int            @default(3)
+  retryDelay           Int            @default(60000)
+
+  // Creator
+  createdById          String
+  createdBy            User           @relation("TaskCreator", fields: [createdById], references: [id])
+
+  // Tracking
+  lastRunAt            DateTime?
+  nextRunAt            DateTime?
+  runCount             Int            @default(0)
+
+  // Relations
+  executions           TaskExecution[]
+
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([status])
+  @@index([agentId])
+  @@index([nextRunAt])
+  @@map("tasks")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  DRAFT
+  PENDING
+  SCHEDULED
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AssignmentMode {
+  MANUAL
+  AUTO
+  BY_CAPABILITY
+}
+
+enum ExecutionMode {
+  IMMEDIATE
+  SCHEDULED
+  RECURRING
+}
+
+enum RecurrenceFreq {
+  MINUTELY
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+// ==================== TASK EXECUTION ====================
+
+model TaskExecution {
+  id          String          @id @default(uuid())
+  taskId      String
+  task        Task            @relation(fields: [taskId], references: [id])
+  agentId     String
+  agent       Agent           @relation(fields: [agentId], references: [id])
+
+  status      ExecutionStatus @default(QUEUED)
+  prompt      String          @db.Text
+  output      String?         @db.Text
+  error       String?
+  exitCode    Int?
+  tokensUsed  Int?
+  durationMs  Int?
+
+  startedAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  @@index([taskId])
+  @@index([agentId])
+  @@index([status])
+  @@map("task_executions")
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  TIMEOUT
+}
+
+// ==================== TOOLS ====================
+
+model ToolDefinition {
+  id               String       @id @default(uuid())
+  name             String       @unique
+  displayName      String
+  description      String?
+  category         ToolCategory
+
+  installCommand   String
+  uninstallCommand String?
+  versionCommand   String
+  versionRegex     String?
+
+  dependencies     Json         @default("[]")
+  minDiskSpace     Int?
+  requiresSudo     Boolean      @default(true)
+
+  website          String?
+  documentation    String?
+  icon             String?
+  tags             Json         @default("[]")
+
+  // Relations
+  serverTools      ServerTool[]
+  agentPermissions AgentToolPermission[]
+
+  @@map("tool_definitions")
+}
+
+enum ToolCategory {
+  VERSION_CONTROL
+  CONTAINER
+  CLOUD_CLI
+  KUBERNETES
+  LANGUAGE_RUNTIME
+  PACKAGE_MANAGER
+  DATABASE_CLIENT
+  DEVOPS
+  UTILITY
+  SECURITY
+  EDITOR
+}
+
+model ServerTool {
+  id               String       @id @default(uuid())
+  serverId         String
+  server           ServerConfiguration @relation(fields: [serverId], references: [id])
+  toolId           String
+  tool             ToolDefinition @relation(fields: [toolId], references: [id])
+
+  status           ToolStatus   @default(NOT_INSTALLED)
+  installedVersion String?
+  installedAt      DateTime?
+  installedBy      String?
+
+  configPath       String?
+  customConfig     Json?
+
+  lastHealthCheck  DateTime?
+  healthStatus     HealthStatus @default(UNKNOWN)
+  lastError        String?
+
+  @@unique([serverId, toolId])
+  @@map("server_tools")
+}
+
+enum ToolStatus {
+  NOT_INSTALLED
+  INSTALLING
+  INSTALLED
+  UPDATING
+  REMOVING
+  FAILED
+  DISABLED
+}
+
+enum HealthStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+}
+
+model AgentToolPermission {
+  id              String   @id @default(uuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id])
+  toolId          String
+  tool            ToolDefinition @relation(fields: [toolId], references: [id])
+
+  canUse          Boolean  @default(true)
+  canSudo         Boolean  @default(false)
+  rateLimit       Int?
+
+  allowedCommands Json     @default("[]")
+  blockedCommands Json     @default("[]")
+
+  grantedBy       String?
+  grantedAt       DateTime @default(now())
+  reason          String?
+
+  @@unique([agentId, toolId])
+  @@map("agent_tool_permissions")
+}

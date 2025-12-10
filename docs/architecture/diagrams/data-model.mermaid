@@ -1,0 +1,105 @@
+%% MCP Agent Studio - Data Model
+%% Generated: 2025-12-10
+
+erDiagram
+    User ||--o{ ServerConfiguration : owns
+    User }o--|| Organization : belongs_to
+    User ||--o{ Agent : creates
+    User ||--o{ Task : creates
+
+    Organization ||--o{ User : has
+
+    ServerConfiguration ||--o{ Agent : hosts
+    ServerConfiguration ||--o{ Task : runs
+    ServerConfiguration ||--o{ ServerTool : has
+
+    Agent ||--o{ Task : assigned
+    Agent ||--o{ TaskExecution : executes
+    Agent ||--o{ AgentToolPermission : has
+    Agent ||--o{ Agent : supervises
+
+    Task ||--o{ TaskExecution : has
+
+    ToolDefinition ||--o{ ServerTool : installed_as
+    ToolDefinition ||--o{ AgentToolPermission : granted_for
+
+    User {
+        uuid id PK
+        string email UK
+        string passwordHash
+        string name
+        enum role
+        uuid organizationId FK
+    }
+
+    Organization {
+        uuid id PK
+        string name
+        string slug UK
+        enum plan
+    }
+
+    ServerConfiguration {
+        uuid id PK
+        uuid userId FK
+        string name
+        string url
+        string masterToken
+        enum status
+        boolean isDefault
+    }
+
+    Agent {
+        uuid id PK
+        uuid serverId FK
+        string name
+        string displayName
+        enum role
+        enum status
+        uuid supervisorId FK
+        json capabilities
+    }
+
+    Task {
+        uuid id PK
+        string title
+        enum priority
+        enum status
+        uuid agentId FK
+        string prompt
+        enum executionMode
+        string cronExpression
+    }
+
+    TaskExecution {
+        uuid id PK
+        uuid taskId FK
+        uuid agentId FK
+        enum status
+        string output
+        int durationMs
+    }
+
+    ToolDefinition {
+        uuid id PK
+        string name UK
+        string displayName
+        enum category
+        string installCommand
+    }
+
+    ServerTool {
+        uuid id PK
+        uuid serverId FK
+        uuid toolId FK
+        enum status
+        string installedVersion
+    }
+
+    AgentToolPermission {
+        uuid id PK
+        uuid agentId FK
+        uuid toolId FK
+        boolean canUse
+        boolean canSudo
+    }
