@@ -1,6 +1,6 @@
 # PLAN-002: Backend Core Implementation
 
-## Status: ACTIVE
+## Status: COMPLETED
 
 | Attribut | Valeur |
 |----------|--------|
