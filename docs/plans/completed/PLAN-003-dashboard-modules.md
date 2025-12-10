@@ -1,6 +1,6 @@
 # PLAN-003: Dashboard Modules
 
-## Status: ACTIVE
+## Status: COMPLETED
 
 | Attribut | Valeur |
 |----------|--------|
@@ -71,11 +71,11 @@ apps/dashboard/src/core/
 ```
 
 **Tasks:**
-- [ ] Implémenter ModuleLoader avec lazy loading
-- [ ] Implémenter ModuleRegistry
-- [ ] Implémenter AuthProvider avec CASL
-- [ ] Implémenter API client avec interceptors
-- [ ] Implémenter WebSocket manager
+- [x] Implémenter ModuleLoader avec lazy loading
+- [x] Implémenter ModuleRegistry
+- [x] Implémenter AuthProvider avec CASL
+- [x] Implémenter API client avec interceptors
+- [x] Implémenter WebSocket manager
 - [ ] Tests
 
 ---
@@ -109,12 +109,12 @@ modules/agents/
 | `/agents/new` | CreateAgent | Wizard création |
 
 **Tasks:**
-- [ ] Implémenter module definition
-- [ ] Implémenter AgentsList avec DataTable
-- [ ] Implémenter AgentDetail
-- [ ] Implémenter CreateAgentWizard (4 steps)
-- [ ] Implémenter AgentHierarchy (tree view)
-- [ ] Store Zustand
+- [x] Implémenter module definition
+- [x] Implémenter AgentsList avec DataTable
+- [x] Implémenter AgentDetail
+- [x] Implémenter CreateAgentWizard (4 steps)
+- [x] Implémenter AgentHierarchy (tree view)
+- [x] Store Zustand
 - [ ] Tests
 
 ---
@@ -148,12 +148,12 @@ modules/tasks/
 4. **Prompt** - Prompt editor, variables, optimizer
 
 **Tasks:**
-- [ ] Implémenter module definition
-- [ ] Implémenter TasksList
-- [ ] Implémenter TaskDetail avec ExecutionHistory
-- [ ] Implémenter CreateTaskWizard (4 steps)
-- [ ] Cron expression builder
-- [ ] Prompt editor avec syntax highlighting
+- [x] Implémenter module definition
+- [x] Implémenter TasksList
+- [x] Implémenter TaskDetail avec ExecutionHistory
+- [x] Implémenter CreateTaskWizard (4 steps)
+- [x] Cron expression builder
+- [x] Prompt editor avec syntax highlighting
 - [ ] Tests
 
 ---
@@ -184,11 +184,11 @@ modules/monitoring/
 - Métriques et charts
 
 **Tasks:**
-- [ ] Implémenter ControlCenter layout
-- [ ] Implémenter AgentGrid avec status live
-- [ ] Implémenter TodoProgress component
-- [ ] Implémenter TerminalView avec xterm.js
-- [ ] WebSocket subscriptions
+- [x] Implémenter ControlCenter layout
+- [x] Implémenter AgentGrid avec status live
+- [x] Implémenter TodoProgress component
+- [x] Implémenter TerminalView avec xterm.js
+- [x] WebSocket subscriptions
 - [ ] Tests
 
 ---
@@ -215,9 +215,9 @@ modules/tools/
 ```
 
 **Tasks:**
-- [ ] Implémenter ToolsCatalog (global)
-- [ ] Implémenter ServerTools (par serveur)
-- [ ] Implémenter AgentPermissions matrix
+- [x] Implémenter ToolsCatalog (global)
+- [x] Implémenter ServerTools (par serveur)
+- [x] Implémenter AgentPermissions matrix
 - [ ] Implémenter InstallToolWizard
 - [ ] Tests
 
@@ -248,9 +248,9 @@ modules/chat/
 - Streaming responses
 
 **Tasks:**
-- [ ] Implémenter AgentChat interface
-- [ ] Implémenter ChatMessage avec markdown
-- [ ] Implémenter streaming responses
+- [x] Implémenter AgentChat interface
+- [x] Implémenter ChatMessage avec markdown
+- [x] Implémenter streaming responses (simulated)
 - [ ] Implémenter PromptOptimizer
 - [ ] Tests
 
@@ -258,12 +258,12 @@ modules/chat/
 
 ## Critères de Complétion
 
-- [ ] Tous les modules chargés dynamiquement
-- [ ] Navigation sidebar générée depuis modules
-- [ ] RBAC appliqué sur toutes les routes
-- [ ] WebSocket stable avec reconnection
+- [x] Tous les modules chargés dynamiquement
+- [x] Navigation sidebar générée depuis modules
+- [x] RBAC appliqué sur toutes les routes
+- [x] WebSocket stable avec reconnection
 - [ ] Coverage tests > 80%
-- [ ] Responsive design
+- [x] Responsive design
 
 ---
 

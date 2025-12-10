@@ -3,6 +3,8 @@ import { ListTodo } from 'lucide-react';
 import type { ModuleDefinition } from '../../core/modules';
 
 const TasksList = lazy(() => import('./pages/TasksList'));
+const TaskDetail = lazy(() => import('./pages/TaskDetail'));
+const CreateTask = lazy(() => import('./pages/CreateTask'));
 
 export const tasksModule: ModuleDefinition = {
   id: 'tasks',
@@ -17,6 +19,21 @@ export const tasksModule: ModuleDefinition = {
       path: 'tasks',
       element: TasksList,
       permissions: [{ action: 'read', subject: 'Task' }],
+    },
+    {
+      path: 'tasks/new',
+      element: CreateTask,
+      permissions: [{ action: 'create', subject: 'Task' }],
+    },
+    {
+      path: 'tasks/:id',
+      element: TaskDetail,
+      permissions: [{ action: 'read', subject: 'Task' }],
+    },
+    {
+      path: 'tasks/:id/edit',
+      element: CreateTask,
+      permissions: [{ action: 'update', subject: 'Task' }],
     },
   ],
 
