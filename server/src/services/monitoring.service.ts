@@ -8,6 +8,35 @@ import type {
 import type { AgentStatus } from '@prisma/client';
 
 export class MonitoringService {
+  private static instance: MonitoringService;
+
+  static getInstance(): MonitoringService {
+    if (!MonitoringService.instance) {
+      MonitoringService.instance = new MonitoringService();
+    }
+    return MonitoringService.instance;
+  }
+
+  // Helper method for broadcasting agent status (used by scheduler/master-agent)
+  broadcastAgentStatus(
+    agentId: string,
+    status: AgentStatus,
+    previousStatus?: AgentStatus,
+    reason?: string
+  ) {
+    this.notifyAgentStatusChange(agentId, status, previousStatus, reason);
+  }
+
+  // Helper method for broadcasting execution events (used by scheduler/master-agent)
+  broadcastExecution(
+    agentId: string,
+    taskId: string,
+    phase: 'starting' | 'running' | 'completed' | 'failed',
+    output?: string
+  ) {
+    this.notifyExecutionEvent(agentId, taskId, '', phase, { output });
+  }
+
   // Agent status change
   notifyAgentStatusChange(
     agentId: string,
