@@ -1,6 +1,6 @@
 # PLAN-003: Dashboard Modules
 
-## Status: BACKLOG
+## Status: ACTIVE
 
 | Attribut | Valeur |
 |----------|--------|

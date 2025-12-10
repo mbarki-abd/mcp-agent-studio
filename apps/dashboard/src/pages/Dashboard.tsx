@@ -66,6 +66,8 @@ export function DashboardHome() {
   );
 }
 
+export default DashboardHome;
+
 function StatCard({
   title,
   value,
