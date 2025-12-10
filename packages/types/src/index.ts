@@ -255,12 +255,16 @@ export interface ExecutionStreamEvent {
 export type RealtimeEvent = AgentStatusEvent | TodoProgressEvent | ExecutionStreamEvent;
 
 // -------------------- Module System --------------------
+// Generic component type for framework-agnostic shared types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ComponentType<P = any> = (props: P) => unknown;
+
 export interface ModuleDefinition {
   id: string;
   name: string;
   version: string;
   description?: string;
-  icon?: React.ComponentType;
+  icon?: ComponentType;
   dependencies?: string[];
   peerDependencies?: string[];
   routes: ModuleRoute[];
@@ -275,12 +279,12 @@ export interface ModuleDefinition {
     onUserLogout?: () => void;
   };
   settings?: ModuleSettings;
-  slots?: Record<string, React.ComponentType[]>;
+  slots?: Record<string, ComponentType[]>;
 }
 
 export interface ModuleRoute {
   path: string;
-  element: React.ComponentType;
+  element: ComponentType;
   layout?: 'default' | 'full' | 'minimal';
   permissions?: string[];
   children?: ModuleRoute[];
@@ -289,7 +293,7 @@ export interface ModuleRoute {
 export interface NavigationItem {
   id: string;
   label: string;
-  icon: React.ComponentType;
+  icon: ComponentType;
   path: string;
   permissions?: string[];
   badge?: () => number | string;

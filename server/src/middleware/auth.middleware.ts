@@ -4,8 +4,9 @@ import { prisma } from '../index.js';
 
 export interface JWTPayload {
   userId: string;
-  email: string;
-  role: string;
+  email?: string;
+  role?: string;
+  type?: string;
   iat?: number;
   exp?: number;
 }
