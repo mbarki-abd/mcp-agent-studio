@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: '9'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create Release
+        id: release
+        uses: google-github-actions/release-please-action@v4
+        with:
+          release-type: node
+          package-name: mcp-agent-studio
+          changelog-types: |
+            [
+              {"type": "feat", "section": "Features", "hidden": false},
+              {"type": "fix", "section": "Bug Fixes", "hidden": false},
+              {"type": "perf", "section": "Performance", "hidden": false},
+              {"type": "refactor", "section": "Refactoring", "hidden": false},
+              {"type": "docs", "section": "Documentation", "hidden": false},
+              {"type": "chore", "section": "Maintenance", "hidden": true}
+            ]
+
+      - name: Tag major and minor versions
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git tag -d v${{ steps.release.outputs.major }} || true
+          git tag -d v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} || true
+          git push origin :v${{ steps.release.outputs.major }} || true
+          git push origin :v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} || true
+          git tag -a v${{ steps.release.outputs.major }} -m "Release v${{ steps.release.outputs.major }}"
+          git tag -a v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} -m "Release v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}"
+          git push origin v${{ steps.release.outputs.major }}
+          git push origin v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}

@@ -1,0 +1,148 @@
+version: '3.8'
+
+# Production Docker Compose for MCP Agent Studio
+# Deploy with: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: mcp-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-certs:/letsencrypt
+    networks:
+      - mcp-network
+    labels:
+      - "traefik.enable=true"
+      # Dashboard (protected)
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Server
+  server:
+    image: ghcr.io/${GITHUB_REPOSITORY:-mbark/mcp-agent-studio}/server:${VERSION:-latest}
+    container_name: mcp-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      CORS_ORIGIN: https://${DOMAIN}
+      API_URL: https://api.${DOMAIN}
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mcp-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.api.middlewares=api-ratelimit,api-headers"
+      - "traefik.http.services.api.loadbalancer.server.port=3000"
+      # WebSocket support
+      - "traefik.http.routers.api-ws.rule=Host(`api.${DOMAIN}`) && PathPrefix(`/api/monitoring`)"
+      - "traefik.http.routers.api-ws.entrypoints=websecure"
+      - "traefik.http.routers.api-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api-ws.loadbalancer.server.port=3000"
+
+  # Frontend Dashboard
+  dashboard:
+    image: ghcr.io/${GITHUB_REPOSITORY:-mbark/mcp-agent-studio}/dashboard:${VERSION:-latest}
+    container_name: mcp-dashboard
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-headers"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=80"
+
+  # Database Backup (runs daily)
+  backup:
+    image: postgres:16-alpine
+    container_name: mcp-backup
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    networks:
+      - mcp-network
+    entrypoint: /bin/sh
+    command: >
+      -c "pg_dump -h postgres -U ${POSTGRES_USER} ${POSTGRES_DB} | gzip > /backups/backup-$$(date +%Y%m%d-%H%M%S).sql.gz && find /backups -name '*.sql.gz' -mtime +7 -delete"
+    profiles:
+      - backup
+
+volumes:
+  postgres-data:
+    name: mcp-postgres-data
+  redis-data:
+    name: mcp-redis-data
+  traefik-certs:
+    name: mcp-traefik-certs
+
+networks:
+  mcp-network:
+    name: mcp-network
+    driver: bridge

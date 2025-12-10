@@ -41,3 +41,12 @@ prisma/migrations/*.sql.bak
 
 # Docker
 docker-compose.override.yml
+
+# Deploy
+deploy/.env
+deploy/backups/
+deploy/traefik/acme.json
+
+# Secrets
+*.pem
+*.key

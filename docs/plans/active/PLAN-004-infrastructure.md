@@ -1,6 +1,6 @@
 # PLAN-004: Infrastructure & Deployment
 
-## Status: BACKLOG
+## Status: ACTIVE
 
 | Attribut | Valeur |
 |----------|--------|
