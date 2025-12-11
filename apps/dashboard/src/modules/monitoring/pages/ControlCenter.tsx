@@ -3,6 +3,8 @@ import { Activity, LayoutGrid, List, Eye, EyeOff, RefreshCw } from 'lucide-react
 import { Button } from '../../../components/ui/button';
 import { AgentMonitorCard } from '../components/AgentMonitorCard';
 import { TodoProgress } from '../components/TodoProgress';
+import { ActivityChart } from '../components/ActivityChart';
+import { ExecutionMetricsChart } from '../components/ExecutionMetricsChart';
 import { useAgents } from '../../../core/api';
 import {
   useWebSocket,
@@ -146,6 +148,21 @@ export default function ControlCenter() {
         <StatCard label="Active" value={stats.active} icon={Activity} color="green" />
         <StatCard label="Busy" value={stats.busy} icon={Activity} color="blue" />
         <StatCard label="Errors" value={stats.error} icon={Activity} color="red" />
+      </div>
+
+      {/* Real-time Charts */}
+      <div className="grid grid-cols-2 gap-6">
+        <div className="rounded-lg border bg-card p-4">
+          <ActivityChart
+            agentIds={Array.from(agents.keys())}
+            maxDataPoints={30}
+          />
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <ExecutionMetricsChart
+            maxDataPoints={60}
+          />
+        </div>
       </div>
 
       {/* Main content */}

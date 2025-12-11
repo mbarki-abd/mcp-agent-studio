@@ -235,9 +235,10 @@ export interface ExecutionStreamEvent {
   type: 'agent:execution';
   agentId: string;
   taskId: string;
+  executionId: string;
   timestamp: Date;
   data: {
-    phase: 'starting' | 'running' | 'completed' | 'failed';
+    phase: 'starting' | 'running' | 'completed' | 'failed' | 'queued' | 'cancelled';
     output?: string;
     toolCall?: {
       name: string;
@@ -252,7 +253,17 @@ export interface ExecutionStreamEvent {
   };
 }
 
-export type RealtimeEvent = AgentStatusEvent | TodoProgressEvent | ExecutionStreamEvent;
+export interface TerminalOutputEvent {
+  type: 'terminal:output';
+  executionId: string;
+  timestamp: Date;
+  data: {
+    output: string;
+    isError: boolean;
+  };
+}
+
+export type RealtimeEvent = AgentStatusEvent | TodoProgressEvent | ExecutionStreamEvent | TerminalOutputEvent;
 
 // -------------------- Module System --------------------
 // Generic component type for framework-agnostic shared types

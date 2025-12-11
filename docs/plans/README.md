@@ -12,20 +12,22 @@ Documentation des plans d'implémentation pour MCP Agent Studio.
 
 | ID | Titre | Priorité | Progress |
 |----|-------|----------|----------|
-| [PLAN-002](./active/PLAN-002-backend-core.md) | Backend Core Implementation | P1 | 0% |
+| [PLAN-005](./active/PLAN-005-v2-roadmap.md) | V2 Roadmap - MCP Real Execution | P0 | 0% |
+| [PLAN-004](./active/PLAN-004-infrastructure.md) | Infrastructure & Deployment | P2 | 80% |
 
 ### Backlog (À venir)
 
 | ID | Titre | Priorité | Dépend de |
 |----|-------|----------|-----------|
-| [PLAN-003](./backlog/PLAN-003-dashboard-modules.md) | Dashboard Modules | P1 | PLAN-002 |
-| [PLAN-004](./backlog/PLAN-004-infrastructure.md) | Infrastructure & Deployment | P2 | PLAN-003 |
+| PLAN-006 | Multi-Organization & Billing | P2 | PLAN-005 |
 
 ### Completed (Terminés)
 
 | ID | Titre | Complété |
 |----|-------|----------|
 | [PLAN-001](./completed/PLAN-001-initial-setup.md) | Initial Setup | 2025-12-10 |
+| [PLAN-002](./completed/PLAN-002-backend-core.md) | Backend Core Implementation | 2025-12-10 |
+| [PLAN-003](./completed/PLAN-003-dashboard-modules.md) | Dashboard Modules | 2025-12-11 |
 
 ---
 

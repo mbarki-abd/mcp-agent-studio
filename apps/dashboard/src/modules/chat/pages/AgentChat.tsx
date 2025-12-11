@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,13 +21,29 @@ import {
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
 import { useChatStore } from '../stores/chat.store';
-import { useAgent, useAgents } from '../../../core/api';
+import {
+  useAgent,
+  useAgents,
+  useCreateChatSession,
+  useSendChatMessageStreaming,
+  useClearChatSession,
+} from '../../../core/api';
+import {
+  useChatSubscription,
+  useChatStreamStart,
+  useChatStreamChunk,
+  useChatStreamEnd,
+  type ChatStreamChunkEvent,
+  type ChatStreamEndEvent,
+} from '../../../core/websocket';
 import { AgentStatusBadge } from '../../agents/components/AgentStatusBadge';
 
 export default function AgentChat() {
   const { agentId } = useParams<{ agentId: string }>();
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [apiSessionId, setApiSessionId] = useState<string | null>(null);
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
 
   // Fetch agents list for selection page
   const { data: agentsData, isLoading: isLoadingAgents } = useAgents({ status: 'ACTIVE' });
@@ -37,10 +53,17 @@ export default function AgentChat() {
     enabled: !!agentId,
   });
 
+  // API mutations
+  const createSession = useCreateChatSession();
+  const sendMessage = useSendChatMessageStreaming();
+  const clearSessionMutation = useClearChatSession();
+
   const {
     isStreaming,
-    createSession,
+    createSession: createLocalSession,
     addMessage,
+    updateMessage,
+    appendToMessage,
     setStreaming,
     clearSession,
     getSessionByAgent,
@@ -51,13 +74,68 @@ export default function AgentChat() {
     if (agentId) {
       const existingSession = getSessionByAgent(agentId);
       if (!existingSession) {
-        createSession(agentId);
+        createLocalSession(agentId);
+      }
+
+      // Create API session if we don't have one
+      if (!apiSessionId) {
+        createSession.mutate(agentId, {
+          onSuccess: (data) => {
+            setApiSessionId(data.id);
+          },
+        });
       }
     }
-  }, [agentId, getSessionByAgent, createSession]);
+  }, [agentId, getSessionByAgent, createLocalSession, apiSessionId, createSession]);
 
   const session = agentId ? getSessionByAgent(agentId) : null;
   const messages = session?.messages || [];
+
+  // Subscribe to WebSocket chat events
+  useChatSubscription(apiSessionId || undefined);
+
+  // Handle streaming start
+  useChatStreamStart(useCallback((event) => {
+    if (event.sessionId === apiSessionId) {
+      setStreamingMessageId(event.messageId);
+      // Add placeholder message for streaming
+      if (session) {
+        addMessage(session.id, {
+          role: 'assistant',
+          content: '',
+          agentId,
+          isStreaming: true,
+        });
+      }
+    }
+  }, [apiSessionId, session, addMessage, agentId]));
+
+  // Handle streaming chunks
+  useChatStreamChunk(useCallback((event: ChatStreamChunkEvent) => {
+    if (event.sessionId === apiSessionId && session) {
+      // Find the last message (should be the streaming one)
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.isStreaming) {
+        appendToMessage(session.id, lastMessage.id, event.chunk);
+      }
+    }
+  }, [apiSessionId, session, messages, appendToMessage]));
+
+  // Handle streaming end
+  useChatStreamEnd(useCallback((event: ChatStreamEndEvent) => {
+    if (event.sessionId === apiSessionId && session) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.isStreaming) {
+        updateMessage(session.id, lastMessage.id, {
+          content: event.content,
+          toolCalls: event.toolCalls,
+          isStreaming: false,
+        });
+      }
+      setStreamingMessageId(null);
+      setStreaming(false);
+    }
+  }, [apiSessionId, session, messages, updateMessage, setStreaming]));
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -66,29 +144,48 @@ export default function AgentChat() {
 
   const handleSend = useCallback(
     async (content: string) => {
-      if (!session) return;
+      if (!session || !apiSessionId) return;
 
-      // Add user message
+      // Add user message locally
       addMessage(session.id, {
         role: 'user',
         content,
       });
 
-      // Simulate streaming response (in real app, this would be a WebSocket/API call)
       setStreaming(true);
 
-      // Add assistant message placeholder
-      const assistantMessageContent = await simulateAgentResponse(content);
-
-      addMessage(session.id, {
-        role: 'assistant',
-        content: assistantMessageContent,
-        agentId,
-      });
-
-      setStreaming(false);
+      // Send via API with streaming
+      sendMessage.mutate(
+        { sessionId: apiSessionId, content },
+        {
+          onError: (error) => {
+            // On error, add error message
+            addMessage(session.id, {
+              role: 'system',
+              content: `Error: ${error.message}`,
+            });
+            setStreaming(false);
+          },
+          onSuccess: (data) => {
+            // If WebSocket didn't handle streaming, use the response directly
+            if (!streamingMessageId) {
+              // Check if we already have the streaming message
+              const lastMsg = messages[messages.length - 1];
+              if (!lastMsg || lastMsg.role !== 'assistant' || !lastMsg.isStreaming) {
+                addMessage(session.id, {
+                  role: 'assistant',
+                  content: data.assistantMessage.content,
+                  agentId,
+                  toolCalls: data.assistantMessage.toolCalls,
+                });
+              }
+              setStreaming(false);
+            }
+          },
+        }
+      );
     },
-    [session, addMessage, setStreaming, agentId]
+    [session, apiSessionId, addMessage, setStreaming, sendMessage, agentId, streamingMessageId, messages]
   );
 
   const handleOptimize = useCallback(
@@ -115,8 +212,9 @@ export default function AgentChat() {
   );
 
   const handleClear = () => {
-    if (session && window.confirm('Clear chat history?')) {
+    if (session && apiSessionId && window.confirm('Clear chat history?')) {
       clearSession(session.id);
+      clearSessionMutation.mutate(apiSessionId);
     }
   };
 
@@ -340,68 +438,4 @@ function getQuickPrompts(capabilities: string[] = []): string[] {
   }
 
   return prompts.slice(0, 4);
-}
-
-async function simulateAgentResponse(userMessage: string): Promise<string> {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 1000));
-
-  // Simple response based on user message
-  const lowerMessage = userMessage.toLowerCase();
-
-  if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-    return "Hello! I'm ready to help you with your tasks. What would you like me to do?";
-  }
-
-  if (lowerMessage.includes('code') || lowerMessage.includes('review')) {
-    return `I can help review your code. Here's what I typically look for:
-
-1. **Code Quality**: Clean, readable, and maintainable code
-2. **Performance**: Potential bottlenecks or inefficiencies
-3. **Security**: Common vulnerabilities and best practices
-4. **Best Practices**: Following language/framework conventions
-
-Please share the code you'd like me to review, and I'll provide detailed feedback.`;
-  }
-
-  if (lowerMessage.includes('test')) {
-    return `I can help you write tests. Here's an example test structure:
-
-\`\`\`typescript
-describe('MyFunction', () => {
-  it('should return expected result', () => {
-    // Arrange
-    const input = 'test';
-
-    // Act
-    const result = myFunction(input);
-
-    // Assert
-    expect(result).toBe('expected');
-  });
-});
-\`\`\`
-
-What function or module would you like me to write tests for?`;
-  }
-
-  if (lowerMessage.includes('help') || lowerMessage.includes('capabilities')) {
-    return `I can assist you with various development tasks:
-
-- **Code Review**: Analyze code for quality, security, and best practices
-- **Testing**: Write unit, integration, and e2e tests
-- **Debugging**: Help identify and fix bugs
-- **Documentation**: Generate documentation for your code
-- **Refactoring**: Suggest improvements to code structure
-
-Just describe what you need help with!`;
-  }
-
-  return `I understand you're asking about: "${userMessage}"
-
-Let me help you with that. Could you provide more details about:
-1. What specific outcome you're looking for?
-2. Any context or constraints I should know about?
-
-The more details you provide, the better I can assist you.`;
 }

@@ -15,12 +15,11 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
-import { ToolCard } from '../components/ToolCard';
+import { InstallToolWizard } from '../components/InstallToolWizard';
 import {
   useServer,
   useServerTools,
   useToolsCatalog,
-  useInstallTool,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
 import type { ToolStatus, HealthStatus } from '@mcp/types';
@@ -51,7 +50,6 @@ export default function ServerTools() {
   const { data: server, isLoading: isLoadingServer } = useServer(serverId || '');
   const { data: serverTools, isLoading: isLoadingTools, refetch } = useServerTools(serverId || '');
   const { data: catalog } = useToolsCatalog();
-  const installTool = useInstallTool();
 
   const isLoading = isLoadingServer || isLoadingTools;
 
@@ -76,15 +74,6 @@ export default function ServerTools() {
       tool.definition?.displayName.toLowerCase().includes(searchLower)
     );
   });
-
-  // Available tools (not installed)
-  const availableTools = catalog?.filter((t) => !installedToolIds.has(t.id)) || [];
-
-  const handleInstall = async (toolId: string) => {
-    await installTool.mutateAsync({ serverId: serverId!, toolId });
-    setShowInstallModal(false);
-    refetch();
-  };
 
   if (isLoading) {
     return (
@@ -237,36 +226,13 @@ export default function ServerTools() {
         </div>
       )}
 
-      {/* Install Modal */}
+      {/* Install Wizard */}
       {showInstallModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h2 className="font-semibold text-lg">Install Tool</h2>
-              <Button variant="ghost" size="sm" onClick={() => setShowInstallModal(false)}>
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
-              {availableTools.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  All available tools are already installed
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {availableTools.map((tool) => (
-                    <ToolCard
-                      key={tool.id}
-                      tool={tool}
-                      onInstall={() => handleInstall(tool.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <InstallToolWizard
+          serverId={serverId}
+          onClose={() => setShowInstallModal(false)}
+          onComplete={() => refetch()}
+        />
       )}
     </div>
   );

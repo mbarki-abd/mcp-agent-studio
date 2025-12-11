@@ -183,6 +183,16 @@ class WebSocketManager {
     }
   }
 
+  // Broadcast to all connected clients
+  broadcast(event: RealtimeEvent) {
+    const message = JSON.stringify(event);
+    for (const [ws] of this.clients) {
+      if (ws.readyState === 1) { // WebSocket.OPEN
+        ws.send(message);
+      }
+    }
+  }
+
   // Get stats
   getStats() {
     return {

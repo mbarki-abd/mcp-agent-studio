@@ -12,11 +12,13 @@ MCP Agent Studio est une plateforme permettant d'orchestrer des agents AI dans u
 
 | Document | Description |
 |----------|-------------|
+| [V2 Implementation Status](./v2-implementation-status.md) | Current progress vs V2 plan |
 | [DECISIONS.md](./DECISIONS.md) | Index des Architecture Decision Records |
 | [diagrams/](./diagrams/) | Diagrammes Mermaid |
 | [ADR-001](./adr/001-tech-stack.md) | Technology Stack |
 | [ADR-002](./adr/002-module-architecture.md) | Module Architecture |
 | [ADR-003](./adr/003-mcp-client.md) | MCP Client Implementation |
+| [PLAN-005](../plans/active/PLAN-005-v2-roadmap.md) | V2 Roadmap (Active) |
 
 ---
 

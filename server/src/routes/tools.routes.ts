@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
+import { getToolInstallationService } from '../services/tool-installation.service.js';
 
 const installToolSchema = z.object({
   toolId: z.string().uuid(),
@@ -145,53 +146,43 @@ export async function toolRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Tool already installed on this server' });
     }
 
-    // Create server tool record
-    const serverTool = await prisma.serverTool.create({
-      data: {
-        serverId,
-        toolId: body.toolId,
-        status: 'INSTALLING',
-        installedBy: userId,
-      },
-    });
+    // Use ToolInstallationService to install
+    const toolService = getToolInstallationService();
+    const result = await toolService.installTool(serverId, body.toolId, userId);
 
-    // Create agent permissions if specified
-    if (body.allowAllAgents) {
-      // Get all agents on this server
-      const agents = await prisma.agent.findMany({
-        where: { serverId },
-        select: { id: true },
-      });
-
-      await prisma.agentToolPermission.createMany({
-        data: agents.map((a) => ({
-          agentId: a.id,
-          toolId: body.toolId,
-          canUse: true,
-          canSudo: false,
-          grantedBy: userId,
-        })),
-      });
-    } else if (body.agentPermissions) {
-      await prisma.agentToolPermission.createMany({
-        data: body.agentPermissions.map((p) => ({
-          agentId: p.agentId,
-          toolId: body.toolId,
-          canUse: p.canUse,
-          canSudo: p.canSudo,
-          rateLimit: p.rateLimit,
-          grantedBy: userId,
-        })),
+    if (!result.success) {
+      return reply.status(400).send({
+        error: result.error || 'Installation failed',
+        output: result.output,
       });
     }
 
-    // TODO: Execute installation via master agent
+    // Create agent permissions if specified
+    if (result.serverToolId) {
+      if (body.allowAllAgents) {
+        const agents = await prisma.agent.findMany({
+          where: { serverId },
+          select: { id: true },
+        });
+
+        for (const agent of agents) {
+          await toolService.grantPermission(agent.id, result.serverToolId, userId);
+        }
+      } else if (body.agentPermissions) {
+        for (const perm of body.agentPermissions) {
+          await toolService.grantPermission(perm.agentId, result.serverToolId, userId, {
+            rateLimit: perm.rateLimit,
+          });
+        }
+      }
+    }
 
     return {
-      id: serverTool.id,
+      id: result.serverToolId,
       toolName: tool.name,
-      status: 'INSTALLING',
-      message: 'Tool installation started',
+      installedVersion: result.installedVersion,
+      status: 'INSTALLED',
+      message: 'Tool installed successfully',
     };
   });
 
@@ -224,20 +215,13 @@ export async function toolRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Tool not installed on this server' });
     }
 
-    // Delete agent permissions
-    await prisma.agentToolPermission.deleteMany({
-      where: {
-        toolId,
-        agent: { serverId },
-      },
-    });
+    // Use ToolInstallationService to uninstall
+    const toolService = getToolInstallationService();
+    const result = await toolService.uninstallTool(serverId, toolId);
 
-    // Delete server tool
-    await prisma.serverTool.delete({
-      where: { id: serverTool.id },
-    });
-
-    // TODO: Execute uninstallation via master agent
+    if (!result.success) {
+      return reply.status(400).send({ error: result.error || 'Uninstallation failed' });
+    }
 
     return { message: 'Tool uninstalled successfully' };
   });

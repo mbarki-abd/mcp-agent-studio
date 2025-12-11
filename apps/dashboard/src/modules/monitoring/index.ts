@@ -4,6 +4,14 @@ import type { ModuleDefinition } from '../../core/modules';
 
 const ControlCenter = lazy(() => import('./pages/ControlCenter'));
 
+// Export components for external use
+export { Terminal, useTerminal } from './components/Terminal';
+export { ExecutionTerminal, StreamingTerminal } from './components/ExecutionTerminal';
+export { ActivityChart } from './components/ActivityChart';
+export { ExecutionMetricsChart } from './components/ExecutionMetricsChart';
+export { AgentMonitorCard } from './components/AgentMonitorCard';
+export { TodoProgress } from './components/TodoProgress';
+
 export const monitoringModule: ModuleDefinition = {
   id: 'monitoring',
   name: 'Monitoring',

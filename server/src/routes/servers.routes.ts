@@ -63,7 +63,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
   fastify.post('/', {
     schema: {
       tags: ['Servers'],
-      description: 'Create a new server configuration',
+      description: 'Create a new server configuration. Server must be online and reachable.',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
@@ -78,6 +78,34 @@ export async function serverRoutes(fastify: FastifyInstance) {
 
     if (existing) {
       return reply.status(400).send({ error: 'Server with this name already exists' });
+    }
+
+    // VALIDATION: Server must be online before being added
+    let serverVersion: string | null = null;
+    let capabilities: string[] = [];
+    try {
+      const healthResponse = await fetch(`${body.url}/health`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${body.masterToken}`,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!healthResponse.ok) {
+        return reply.status(400).send({
+          error: `Server is not reachable or returned error: HTTP ${healthResponse.status}. Server must be online to be added.`
+        });
+      }
+
+      const healthData = await healthResponse.json() as { version?: string; capabilities?: string[] };
+      serverVersion = healthData.version || null;
+      capabilities = healthData.capabilities || [];
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return reply.status(400).send({
+        error: `Cannot connect to server: ${errorMessage}. Server must be online to be added.`
+      });
     }
 
     // If this is the first server or isDefault is true, make it default
@@ -102,7 +130,10 @@ export async function serverRoutes(fastify: FastifyInstance) {
         masterToken: encrypt(body.masterToken),
         isDefault,
         autoConnect: body.autoConnect ?? true,
-        status: 'UNKNOWN',
+        status: 'ONLINE',
+        serverVersion,
+        capabilities,
+        lastHealthCheck: new Date(),
       },
     });
 
@@ -112,6 +143,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
       url: server.url,
       status: server.status,
       isDefault: server.isDefault,
+      serverVersion,
     };
   });
 
@@ -339,6 +371,62 @@ export async function serverRoutes(fastify: FastifyInstance) {
         status: 'OFFLINE',
         error: errorMessage,
       };
+    }
+  });
+
+  // Pre-validate server connection (before creating)
+  fastify.post('/validate', {
+    schema: {
+      tags: ['Servers'],
+      description: 'Validate server connection before creating',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      url: z.string().url(),
+      masterToken: z.string().min(1),
+    }).parse(request.body);
+
+    try {
+      const startTime = Date.now();
+      const response = await fetch(`${body.url}/health`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${body.masterToken}`,
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const latency = Date.now() - startTime;
+
+      if (!response.ok) {
+        return reply.status(400).send({
+          valid: false,
+          error: `Server returned HTTP ${response.status}`,
+          latency,
+        });
+      }
+
+      const data = await response.json() as {
+        version?: string;
+        capabilities?: string[];
+        status?: string;
+      };
+
+      return {
+        valid: true,
+        latency,
+        serverVersion: data.version || 'unknown',
+        capabilities: data.capabilities || [],
+        status: data.status || 'healthy',
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return reply.status(400).send({
+        valid: false,
+        error: errorMessage,
+      });
     }
   });
 

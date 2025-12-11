@@ -33,6 +33,11 @@ export const queryKeys = {
     list: (params?: object) => ['tasks', 'list', params] as const,
     detail: (id: string) => ['tasks', 'detail', id] as const,
     executions: (taskId: string) => ['tasks', taskId, 'executions'] as const,
+    dependencies: (taskId: string) => ['tasks', taskId, 'dependencies'] as const,
+  },
+  chat: {
+    sessions: ['chat', 'sessions'] as const,
+    messages: (sessionId: string) => ['chat', 'messages', sessionId] as const,
   },
   tools: {
     catalog: ['tools', 'catalog'] as const,
@@ -121,6 +126,33 @@ export function useTestServerConnection() {
   });
 }
 
+export interface ServerValidationResult {
+  valid: boolean;
+  latency?: number;
+  serverVersion?: string;
+  capabilities?: string[];
+  status?: string;
+  error?: string;
+}
+
+export function useValidateServerConnection() {
+  return useMutation({
+    mutationFn: (data: { url: string; masterToken: string }) =>
+      apiClient.post<ServerValidationResult>('/servers/validate', data),
+  });
+}
+
+export function useUninstallTool() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serverId, toolId }: { serverId: string; toolId: string }) =>
+      apiClient.delete(`/tools/servers/${serverId}/tools/${toolId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tools.server(variables.serverId) });
+    },
+  });
+}
+
 // Agent hooks
 export function useAgents(params?: { serverId?: string; status?: string; page?: number; pageSize?: number }) {
   return useQuery({
@@ -183,6 +215,33 @@ export function useDeleteAgent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete(`/agents/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents.all });
+    },
+  });
+}
+
+// Agent prompt creation hooks
+export interface ParsedAgentConfig {
+  name: string;
+  role: 'MASTER' | 'SUPERVISOR' | 'WORKER';
+  capabilities: string[];
+  prompt: string;
+  originalPrompt: string;
+}
+
+export function useParseAgentPrompt() {
+  return useMutation({
+    mutationFn: (prompt: string) =>
+      apiClient.post<ParsedAgentConfig>('/agents/parse-prompt', { prompt }),
+  });
+}
+
+export function useCreateAgentFromPrompt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { prompt: string; serverId: string; supervisorId?: string }) =>
+      apiClient.post<Agent>('/agents/from-prompt', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.all });
     },
@@ -298,6 +357,57 @@ export function useCancelTask() {
   });
 }
 
+// Task Dependencies hooks
+export interface TaskDependency {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface TaskDependenciesResponse {
+  taskId: string;
+  canExecute: boolean;
+  dependencies: Array<{
+    id: string;
+    title: string;
+    status: string;
+    completed: boolean;
+  }>;
+  blockedBy: TaskDependency[];
+}
+
+export function useTaskDependencies(taskId: string) {
+  return useQuery({
+    queryKey: queryKeys.tasks.dependencies(taskId),
+    queryFn: () => apiClient.get<TaskDependenciesResponse>(`/tasks/${taskId}/dependencies`),
+    enabled: !!taskId,
+  });
+}
+
+export function useAddTaskDependencies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, dependsOnIds }: { taskId: string; dependsOnIds: string[] }) =>
+      apiClient.post<{ dependsOnIds: string[] }>(`/tasks/${taskId}/dependencies`, { dependsOnIds }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.dependencies(variables.taskId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(variables.taskId) });
+    },
+  });
+}
+
+export function useRemoveTaskDependencies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, dependsOnIds }: { taskId: string; dependsOnIds: string[] }) =>
+      apiClient.delete(`/tasks/${taskId}/dependencies`, { data: { dependsOnIds } }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.dependencies(variables.taskId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(variables.taskId) });
+    },
+  });
+}
+
 // Tools hooks
 export function useToolsCatalog() {
   return useQuery({
@@ -307,6 +417,17 @@ export function useToolsCatalog() {
       return response.tools;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes - catalog doesn't change often
+  });
+}
+
+export function useToolDefinitions() {
+  return useQuery({
+    queryKey: queryKeys.tools.catalog,
+    queryFn: async () => {
+      const response = await apiClient.get<{ tools: ToolDefinition[] }>('/tools/definitions');
+      return response;
+    },
+    staleTime: 10 * 60 * 1000,
   });
 }
 
@@ -350,6 +471,100 @@ export function useUpdateAgentToolPermissions() {
       apiClient.put(`/tools/agents/${agentId}/permissions`, { permissions }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tools.agentPermissions(variables.agentId) });
+    },
+  });
+}
+
+// Chat types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  agentId?: string;
+  toolCalls?: Array<{
+    name: string;
+    params: Record<string, unknown>;
+    result?: string;
+  }>;
+  timestamp: string;
+}
+
+export interface ChatSession {
+  id: string;
+  agentId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Chat hooks
+export function useChatSessions(agentId?: string) {
+  return useQuery({
+    queryKey: agentId ? ['chat', 'sessions', agentId] : queryKeys.chat.sessions,
+    queryFn: async () => {
+      const query = agentId ? `?agentId=${agentId}` : '';
+      const response = await apiClient.get<{ sessions: ChatSession[] }>(`/chat/sessions${query}`);
+      return response.sessions;
+    },
+  });
+}
+
+export function useCreateChatSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (agentId: string) =>
+      apiClient.post<ChatSession>('/chat/sessions', { agentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.sessions });
+    },
+  });
+}
+
+export function useChatMessages(sessionId: string | undefined) {
+  return useQuery({
+    queryKey: ['chat', 'messages', sessionId],
+    queryFn: async () => {
+      const response = await apiClient.get<{ messages: ChatMessage[] }>(`/chat/sessions/${sessionId}/messages`);
+      return response.messages;
+    },
+    enabled: !!sessionId,
+  });
+}
+
+export function useSendChatMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, content }: { sessionId: string; content: string }) =>
+      apiClient.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>(
+        `/chat/sessions/${sessionId}/messages`,
+        { content }
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.sessionId] });
+    },
+  });
+}
+
+export function useSendChatMessageStreaming() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sessionId, content }: { sessionId: string; content: string }) =>
+      apiClient.post<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>(
+        `/chat/sessions/${sessionId}/stream`,
+        { content }
+      ),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', variables.sessionId] });
+    },
+  });
+}
+
+export function useClearChatSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      apiClient.delete(`/chat/sessions/${sessionId}`),
+    onSuccess: (_, sessionId) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'messages', sessionId] });
     },
   });
 }

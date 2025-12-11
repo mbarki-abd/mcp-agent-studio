@@ -390,4 +390,187 @@ export async function agentRoutes(fastify: FastifyInstance) {
       hierarchy: buildTree(null),
     };
   });
+
+  // Preview agent configuration from prompt (without creating)
+  fastify.post('/parse-prompt', {
+    schema: {
+      tags: ['Agents'],
+      description: 'Parse a prompt and preview the agent configuration that would be created',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest) => {
+    const body = z.object({
+      prompt: z.string().min(10).max(1000),
+    }).parse(request.body);
+
+    const config = parseAgentPrompt(body.prompt);
+
+    return {
+      preview: true,
+      config,
+      message: 'Preview of agent that would be created. Use POST /agents/from-prompt to create.',
+    };
+  });
+
+  // Create agent from natural language prompt
+  fastify.post('/from-prompt', {
+    schema: {
+      tags: ['Agents'],
+      description: 'Create an agent from a natural language description',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const body = z.object({
+      serverId: z.string().uuid(),
+      prompt: z.string().min(10).max(1000),
+    }).parse(request.body);
+
+    // Verify server belongs to user
+    const server = await prisma.serverConfiguration.findFirst({
+      where: { id: body.serverId, userId },
+    });
+
+    if (!server) {
+      return reply.status(404).send({ error: 'Server not found' });
+    }
+
+    // Parse the prompt to extract agent configuration
+    const agentConfig = parseAgentPrompt(body.prompt);
+
+    // Check if agent name exists on server
+    const existing = await prisma.agent.findUnique({
+      where: { serverId_name: { serverId: body.serverId, name: agentConfig.name } },
+    });
+
+    if (existing) {
+      // Generate unique name
+      const timestamp = Date.now().toString(36);
+      agentConfig.name = `${agentConfig.name}-${timestamp}`;
+    }
+
+    // Create agent (pending validation)
+    const agent = await prisma.agent.create({
+      data: {
+        serverId: body.serverId,
+        name: agentConfig.name,
+        displayName: agentConfig.displayName,
+        description: agentConfig.description,
+        role: agentConfig.role,
+        status: 'PENDING_VALIDATION',
+        capabilities: agentConfig.capabilities,
+        createdById: userId,
+      },
+    });
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      displayName: agent.displayName,
+      description: agent.description,
+      role: agent.role,
+      capabilities: agent.capabilities,
+      status: agent.status,
+      message: 'Agent created from prompt and pending validation',
+      parsedFrom: body.prompt,
+    };
+  });
+}
+
+/**
+ * Parse a natural language prompt to extract agent configuration
+ */
+function parseAgentPrompt(prompt: string): {
+  name: string;
+  displayName: string;
+  description: string;
+  role: 'MASTER' | 'SUPERVISOR' | 'WORKER';
+  capabilities: string[];
+} {
+  const lowerPrompt = prompt.toLowerCase();
+
+  // Extract role from keywords
+  let role: 'MASTER' | 'SUPERVISOR' | 'WORKER' = 'WORKER';
+  if (lowerPrompt.includes('master') || lowerPrompt.includes('orchestrat') || lowerPrompt.includes('coordinate')) {
+    role = 'MASTER';
+  } else if (lowerPrompt.includes('supervisor') || lowerPrompt.includes('manage') || lowerPrompt.includes('oversee')) {
+    role = 'SUPERVISOR';
+  }
+
+  // Extract capabilities based on keywords
+  const capabilities: string[] = [];
+  const capabilityKeywords: Record<string, string[]> = {
+    'code-review': ['code review', 'review code', 'code quality', 'pull request'],
+    'testing': ['test', 'testing', 'qa', 'quality assurance', 'unit test', 'e2e'],
+    'documentation': ['document', 'docs', 'readme', 'api doc'],
+    'deployment': ['deploy', 'deployment', 'ci/cd', 'release', 'publish'],
+    'security': ['security', 'vulnerability', 'audit', 'pentest', 'secure'],
+    'database': ['database', 'sql', 'migration', 'schema', 'query'],
+    'api-development': ['api', 'rest', 'graphql', 'endpoint'],
+    'frontend': ['frontend', 'ui', 'react', 'vue', 'angular', 'css'],
+    'backend': ['backend', 'server', 'api', 'node', 'python', 'java'],
+    'devops': ['devops', 'infrastructure', 'docker', 'kubernetes', 'aws', 'cloud'],
+    'monitoring': ['monitor', 'logging', 'metrics', 'alert', 'observability'],
+    'data-analysis': ['data', 'analytics', 'analysis', 'report', 'insights'],
+    'machine-learning': ['ml', 'machine learning', 'ai', 'model', 'training'],
+    'communication': ['communicate', 'slack', 'email', 'notification', 'report'],
+  };
+
+  for (const [capability, keywords] of Object.entries(capabilityKeywords)) {
+    if (keywords.some(kw => lowerPrompt.includes(kw))) {
+      capabilities.push(capability);
+    }
+  }
+
+  // If no capabilities detected, add some defaults based on the prompt
+  if (capabilities.length === 0) {
+    capabilities.push('general-assistance');
+  }
+
+  // Extract a display name from the prompt
+  let displayName = 'Custom Agent';
+
+  // Try to find patterns like "agent for X", "X agent", "agent that does X"
+  const namePatterns = [
+    /(?:create|make|build|want|need)\s+(?:an?\s+)?([a-z-]+)\s+agent/i,
+    /agent\s+(?:for|that|to)\s+([a-z\s]+?)(?:\.|,|$)/i,
+    /([a-z]+)\s+agent/i,
+  ];
+
+  for (const pattern of namePatterns) {
+    const match = prompt.match(pattern);
+    if (match && match[1]) {
+      const extracted = match[1].trim();
+      if (extracted.length > 2 && extracted.length < 50) {
+        displayName = extracted.charAt(0).toUpperCase() + extracted.slice(1) + ' Agent';
+        break;
+      }
+    }
+  }
+
+  // Fallback: use role + first capability
+  if (displayName === 'Custom Agent' && capabilities.length > 0) {
+    const cap = capabilities[0].replace(/-/g, ' ');
+    displayName = cap.charAt(0).toUpperCase() + cap.slice(1) + ' Agent';
+  }
+
+  // Generate a slug name from displayName
+  const name = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 40);
+
+  // Use the prompt as the description
+  const description = prompt.length > 200 ? prompt.substring(0, 197) + '...' : prompt;
+
+  return {
+    name,
+    displayName,
+    description,
+    role,
+    capabilities,
+  };
 }

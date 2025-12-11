@@ -4,6 +4,9 @@ import type {
   TodoProgressEvent,
   ExecutionStreamEvent,
   ServerStatusEvent,
+  ServerToolEvent,
+  TaskProgressEvent,
+  TerminalOutputEvent,
 } from '../websocket/types.js';
 import type { AgentStatus } from '@prisma/client';
 
@@ -132,6 +135,65 @@ export class MonitoringService {
     };
 
     wsManager.broadcastToServer(serverId, event);
+  }
+
+  // Tool status change
+  broadcastToolStatus(
+    serverId: string,
+    toolName: string,
+    status: 'INSTALLED' | 'UNINSTALLED' | 'INSTALLING' | 'FAILED'
+  ) {
+    const event: ServerToolEvent = {
+      type: 'server:tool',
+      serverId,
+      timestamp: new Date(),
+      data: {
+        toolName,
+        status,
+      },
+    };
+
+    wsManager.broadcast(event);
+  }
+
+  // Task execution progress
+  broadcastTaskProgress(
+    taskId: string,
+    executionId: string,
+    progress: number,
+    message?: string
+  ) {
+    const event: TaskProgressEvent = {
+      type: 'task:progress',
+      taskId,
+      executionId,
+      timestamp: new Date(),
+      data: {
+        progress,
+        message,
+      },
+    };
+
+    wsManager.broadcast(event);
+  }
+
+  // Terminal output stream
+  broadcastTerminalOutput(
+    executionId: string,
+    output: string,
+    isError = false
+  ) {
+    const event: TerminalOutputEvent = {
+      type: 'terminal:output',
+      executionId,
+      timestamp: new Date(),
+      data: {
+        output,
+        isError,
+      },
+    };
+
+    wsManager.broadcast(event);
   }
 
   // Get connection stats

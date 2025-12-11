@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,6 +14,8 @@ import {
   Loader2,
   Zap,
   Repeat,
+  Server,
+  ChevronRight,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -22,7 +24,11 @@ import {
   useCreateTask,
   useUpdateTask,
   useTask,
+  useTasks,
   useAgents,
+  useAgent,
+  useServers,
+  useServer,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
 import type { Priority, ExecutionMode, AssignmentMode, RecurrenceFreq } from '@mcp/types';
@@ -38,6 +44,7 @@ const taskSchema = z.object({
   assignmentMode: z.enum(['MANUAL', 'AUTO', 'BY_CAPABILITY']),
   agentId: z.string().optional(),
   requiredCapabilities: z.array(z.string()),
+  dependsOnIds: z.array(z.string()),
   prompt: z.string().min(1, 'Prompt is required'),
   promptVariables: z.record(z.string()),
   timeout: z.number().min(0).optional(),
@@ -94,16 +101,43 @@ const defaultCapabilities = [
 
 export default function CreateTask() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditing = !!id;
 
+  // Get pre-selected agent and server from URL params
+  const preSelectedAgentId = searchParams.get('agentId');
+  const preSelectedServerId = searchParams.get('serverId');
+
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedServerId, setSelectedServerId] = useState<string>(preSelectedServerId || '');
 
   const { data: existingTask, isLoading: isLoadingTask } = useTask(id || '', {
     enabled: isEditing,
   });
 
-  const { data: agentsData } = useAgents({ status: 'ACTIVE' });
+  // Get pre-selected agent info
+  const { data: preSelectedAgent } = useAgent(preSelectedAgentId || '', {
+    enabled: !!preSelectedAgentId,
+  });
+
+  // Get pre-selected server info (from agent or directly)
+  const agentServerId = preSelectedAgent?.serverId;
+  const effectiveServerId = preSelectedServerId || agentServerId || selectedServerId;
+
+  const { data: preSelectedServer } = useServer(effectiveServerId || '', {
+    enabled: !!effectiveServerId,
+  });
+
+  // Get all servers for hierarchical selection
+  const { data: serversData } = useServers();
+  const servers = serversData?.items || [];
+
+  // Get agents filtered by server if server is selected
+  const { data: agentsData } = useAgents({
+    status: 'ACTIVE',
+    serverId: effectiveServerId || undefined,
+  });
   const agents = agentsData?.items || [];
 
   const createTask = useCreateTask();
@@ -122,14 +156,37 @@ export default function CreateTask() {
     defaultValues: {
       priority: 'MEDIUM',
       executionMode: 'IMMEDIATE',
-      assignmentMode: 'AUTO',
+      assignmentMode: preSelectedAgentId ? 'MANUAL' : 'AUTO',
+      agentId: preSelectedAgentId || '',
       requiredCapabilities: [],
+      dependsOnIds: [],
       promptVariables: {},
       maxRetries: 3,
       retryDelay: 60,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
   });
+
+  // Get all tasks for dependency selection (exclude current task if editing)
+  const { data: allTasksData } = useTasks({ pageSize: 100 });
+  const availableTasks = (allTasksData?.items || []).filter(
+    (t) => t.id !== id && t.status !== 'COMPLETED' && t.status !== 'FAILED'
+  );
+
+  // Set form values from URL params when they're available
+  useEffect(() => {
+    if (preSelectedAgentId && !isEditing) {
+      setValue('agentId', preSelectedAgentId);
+      setValue('assignmentMode', 'MANUAL');
+    }
+  }, [preSelectedAgentId, isEditing, setValue]);
+
+  // Update selectedServerId when agent's server is known
+  useEffect(() => {
+    if (agentServerId && !selectedServerId) {
+      setSelectedServerId(agentServerId);
+    }
+  }, [agentServerId, selectedServerId]);
 
   const executionMode = watch('executionMode');
   const assignmentMode = watch('assignmentMode');
@@ -149,6 +206,7 @@ export default function CreateTask() {
       setValue('assignmentMode', existingTask.assignmentMode);
       setValue('agentId', existingTask.agentId || '');
       setValue('requiredCapabilities', existingTask.requiredCapabilities || []);
+      setValue('dependsOnIds', (existingTask as { dependsOnIds?: string[] }).dependsOnIds || []);
       setValue('prompt', existingTask.prompt);
       setValue('promptVariables', existingTask.promptVariables || {});
       setValue('timeout', existingTask.timeout);
@@ -206,9 +264,41 @@ export default function CreateTask() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Hierarchy Breadcrumb */}
+      {(preSelectedAgentId || preSelectedServerId) && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+          <Server className="h-4 w-4" />
+          {preSelectedServer ? (
+            <Link to="/servers" className="hover:text-foreground transition-colors">
+              {preSelectedServer.name}
+            </Link>
+          ) : (
+            <span>Server</span>
+          )}
+          <ChevronRight className="h-4 w-4" />
+          {preSelectedAgent ? (
+            <>
+              <Bot className="h-4 w-4" />
+              <Link to={`/agents/${preSelectedAgent.id}`} className="hover:text-foreground transition-colors">
+                {preSelectedAgent.displayName}
+              </Link>
+              <ChevronRight className="h-4 w-4" />
+            </>
+          ) : (
+            <>
+              <Bot className="h-4 w-4" />
+              <span>Agent</span>
+              <ChevronRight className="h-4 w-4" />
+            </>
+          )}
+          <ListTodo className="h-4 w-4 text-primary" />
+          <span className="text-foreground font-medium">New Task</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/tasks')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(preSelectedAgentId ? `/agents/${preSelectedAgentId}` : '/tasks')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -216,7 +306,11 @@ export default function CreateTask() {
             {isEditing ? 'Edit Task' : 'Create Task'}
           </h1>
           <p className="text-muted-foreground">
-            {isEditing ? 'Update task configuration' : 'Configure a new task for execution'}
+            {isEditing
+              ? 'Update task configuration'
+              : preSelectedAgent
+                ? `Create a task for ${preSelectedAgent.displayName}`
+                : 'Configure a new task for execution'}
           </p>
         </div>
       </div>
@@ -480,25 +574,65 @@ export default function CreateTask() {
             </div>
 
             {assignmentMode === 'MANUAL' && (
-              <div className="space-y-2">
-                <Label>Select Agent</Label>
-                <Controller
-                  name="agentId"
-                  control={control}
-                  render={({ field }) => (
+              <div className="space-y-4">
+                {/* Server Selection (for filtering agents) */}
+                {!preSelectedAgentId && (
+                  <div className="space-y-2">
+                    <Label>Filter by Server (Optional)</Label>
                     <select
-                      {...field}
+                      value={selectedServerId}
+                      onChange={(e) => {
+                        setSelectedServerId(e.target.value);
+                        // Clear agent selection when server changes
+                        setValue('agentId', '');
+                      }}
                       className="w-full px-3 py-2 rounded-md border bg-background"
                     >
-                      <option value="">Select an agent</option>
-                      {agents.map((agent) => (
-                        <option key={agent.id} value={agent.id}>
-                          {agent.displayName} ({agent.role.toLowerCase()})
+                      <option value="">All Servers</option>
+                      {servers.map((server) => (
+                        <option key={server.id} value={server.id}>
+                          {server.name}
                         </option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground">
+                      Select a server to filter agents
+                    </p>
+                  </div>
+                )}
+
+                {/* Agent Selection */}
+                <div className="space-y-2">
+                  <Label>Select Agent</Label>
+                  <Controller
+                    name="agentId"
+                    control={control}
+                    render={({ field }) => (
+                      <select
+                        {...field}
+                        className="w-full px-3 py-2 rounded-md border bg-background"
+                        disabled={!!preSelectedAgentId}
+                      >
+                        <option value="">Select an agent</option>
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {agent.displayName} ({agent.role.toLowerCase()})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  />
+                  {preSelectedAgentId && preSelectedAgent && (
+                    <p className="text-xs text-muted-foreground">
+                      Agent pre-selected from hierarchy
+                    </p>
                   )}
-                />
+                  {agents.length === 0 && selectedServerId && (
+                    <p className="text-xs text-yellow-600">
+                      No active agents found for this server
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -571,6 +705,70 @@ export default function CreateTask() {
                   {...register('timeout', { valueAsNumber: true })}
                 />
               </div>
+            </div>
+
+            {/* Task Dependencies */}
+            <div className="space-y-3">
+              <Label>Task Dependencies (Optional)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                This task will wait for the selected tasks to complete before executing.
+              </p>
+              <Controller
+                name="dependsOnIds"
+                control={control}
+                render={({ field }) => (
+                  <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
+                    {availableTasks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-2 text-center">
+                        No other tasks available
+                      </p>
+                    ) : (
+                      availableTasks.map((task) => {
+                        const isSelected = field.value.includes(task.id);
+                        return (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                field.onChange(field.value.filter((id) => id !== task.id));
+                              } else {
+                                field.onChange([...field.value, task.id]);
+                              }
+                            }}
+                            className={cn(
+                              'w-full px-3 py-2 rounded-lg border text-sm text-left transition-all flex items-center justify-between',
+                              isSelected
+                                ? 'border-primary bg-primary/5 text-primary'
+                                : 'hover:border-primary/50'
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs">
+                                {isSelected ? '✓' : '○'}
+                              </span>
+                              <span>{task.title}</span>
+                            </div>
+                            <span className={cn(
+                              'text-xs px-2 py-0.5 rounded',
+                              task.status === 'PENDING' && 'bg-gray-100 text-gray-600',
+                              task.status === 'RUNNING' && 'bg-blue-100 text-blue-600',
+                              task.status === 'SCHEDULED' && 'bg-purple-100 text-purple-600'
+                            )}>
+                              {task.status.toLowerCase()}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              />
+              {formValues.dependsOnIds && formValues.dependsOnIds.length > 0 && (
+                <p className="text-xs text-primary">
+                  {formValues.dependsOnIds.length} dependency(ies) selected
+                </p>
+              )}
             </div>
           </div>
         )}

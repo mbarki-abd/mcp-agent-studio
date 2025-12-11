@@ -6,4 +6,13 @@ export {
   useAgentStatus,
   useTodoProgress,
   useExecutionStream,
+  // Chat streaming
+  useChatSubscription,
+  useChatStreamStart,
+  useChatStreamChunk,
+  useChatStreamEnd,
+  // Types
+  type ChatStreamStartEvent,
+  type ChatStreamChunkEvent,
+  type ChatStreamEndEvent,
 } from './WebSocketProvider';

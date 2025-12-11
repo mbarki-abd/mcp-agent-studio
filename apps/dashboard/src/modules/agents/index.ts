@@ -3,7 +3,7 @@ import { Bot } from 'lucide-react';
 import type { ModuleDefinition } from '../../core/modules';
 
 const AgentsList = lazy(() => import('./pages/AgentsList'));
-const AgentDetail = lazy(() => import('./pages/AgentDetail'));
+const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const CreateAgent = lazy(() => import('./pages/CreateAgent'));
 
 export const agentsModule: ModuleDefinition = {
@@ -27,7 +27,7 @@ export const agentsModule: ModuleDefinition = {
     },
     {
       path: '/agents/:id',
-      element: AgentDetail,
+      element: AgentDashboard,
       permissions: [{ action: 'read', subject: 'Agent' }],
     },
     {

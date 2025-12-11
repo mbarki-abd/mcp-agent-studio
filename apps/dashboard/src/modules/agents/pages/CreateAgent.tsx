@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,6 +12,12 @@ import {
   Settings,
   Check,
   Loader2,
+  ChevronRight,
+  FileText,
+  Sparkles,
+  Copy,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -21,6 +27,7 @@ import {
   useUpdateAgent,
   useAgent,
   useServers,
+  useServer,
   useAgents,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
@@ -40,6 +47,8 @@ const agentSchema = z.object({
   unixUser: z.string().optional(),
   homeDir: z.string().optional(),
   capabilities: z.array(z.string()),
+  promptTemplate: z.string().optional(),
+  promptVariables: z.record(z.string()).optional(),
 });
 
 type AgentFormData = z.infer<typeof agentSchema>;
@@ -48,7 +57,120 @@ const steps = [
   { id: 'info', title: 'Basic Info', icon: Bot },
   { id: 'server', title: 'Server & Hierarchy', icon: Server },
   { id: 'capabilities', title: 'Capabilities', icon: Settings },
+  { id: 'prompt', title: 'Prompt Template', icon: FileText },
   { id: 'review', title: 'Review', icon: Check },
+];
+
+// Predefined prompt templates
+const promptTemplates = [
+  {
+    id: 'code-assistant',
+    name: 'Code Assistant',
+    description: 'General-purpose coding assistant for development tasks',
+    icon: '💻',
+    template: `You are a skilled software developer assistant. Your responsibilities include:
+
+- Writing clean, maintainable, and well-documented code
+- Reviewing code for bugs, security issues, and best practices
+- Suggesting optimizations and improvements
+- Following the project's coding standards and conventions
+
+When working on tasks:
+1. Analyze the requirements carefully
+2. Plan your approach before implementing
+3. Write tests when appropriate
+4. Document significant changes
+
+Project Context: {{PROJECT_CONTEXT}}
+Working Directory: {{WORKING_DIR}}`,
+    variables: ['PROJECT_CONTEXT', 'WORKING_DIR'],
+  },
+  {
+    id: 'devops-engineer',
+    name: 'DevOps Engineer',
+    description: 'Infrastructure and deployment automation specialist',
+    icon: '🚀',
+    template: `You are a DevOps engineer responsible for infrastructure and deployments. Your focus areas include:
+
+- Infrastructure as Code (Terraform, CloudFormation)
+- CI/CD pipeline management
+- Container orchestration (Docker, Kubernetes)
+- Monitoring and observability
+- Security best practices
+
+Environment: {{ENVIRONMENT}}
+Cloud Provider: {{CLOUD_PROVIDER}}
+Kubernetes Cluster: {{K8S_CLUSTER}}
+
+Always follow the principle of least privilege and ensure all changes are reversible.`,
+    variables: ['ENVIRONMENT', 'CLOUD_PROVIDER', 'K8S_CLUSTER'],
+  },
+  {
+    id: 'qa-tester',
+    name: 'QA Tester',
+    description: 'Quality assurance and testing specialist',
+    icon: '🔍',
+    template: `You are a QA specialist focused on ensuring software quality. Your responsibilities:
+
+- Writing and maintaining automated tests
+- Manual testing when necessary
+- Bug reporting with detailed reproduction steps
+- Performance and load testing
+- Security vulnerability assessment
+
+Testing Framework: {{TEST_FRAMEWORK}}
+Test Environment: {{TEST_ENV}}
+
+Prioritize critical user flows and edge cases. Always verify fixes with regression testing.`,
+    variables: ['TEST_FRAMEWORK', 'TEST_ENV'],
+  },
+  {
+    id: 'security-analyst',
+    name: 'Security Analyst',
+    description: 'Security auditing and vulnerability assessment',
+    icon: '🔐',
+    template: `You are a security analyst responsible for identifying and mitigating vulnerabilities. Your focus areas:
+
+- Code security reviews (OWASP Top 10)
+- Dependency vulnerability scanning
+- Access control verification
+- Data protection compliance
+- Incident response
+
+Security Standards: {{SECURITY_STANDARDS}}
+Compliance Requirements: {{COMPLIANCE}}
+
+Report all findings with severity levels and remediation recommendations.`,
+    variables: ['SECURITY_STANDARDS', 'COMPLIANCE'],
+  },
+  {
+    id: 'data-engineer',
+    name: 'Data Engineer',
+    description: 'Data pipeline and database management specialist',
+    icon: '📊',
+    template: `You are a data engineer specializing in data pipelines and database management. Your responsibilities:
+
+- Designing and maintaining data pipelines
+- Database schema design and optimization
+- ETL/ELT process development
+- Data quality monitoring
+- Query performance optimization
+
+Primary Database: {{DATABASE}}
+Data Warehouse: {{DATA_WAREHOUSE}}
+Pipeline Tool: {{PIPELINE_TOOL}}
+
+Ensure data integrity and maintain comprehensive documentation of data flows.`,
+    variables: ['DATABASE', 'DATA_WAREHOUSE', 'PIPELINE_TOOL'],
+  },
+  {
+    id: 'custom',
+    name: 'Custom Template',
+    description: 'Start with a blank slate and write your own prompt',
+    icon: '✨',
+    template: '',
+    variables: [],
+  },
 ];
 
 const roles: Array<{ value: AgentRole; label: string; description: string; icon: typeof Bot }> = [
@@ -87,16 +209,33 @@ const defaultCapabilities = [
 
 export default function CreateAgent() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditing = !!id;
 
+  // Get pre-selected server and supervisor from URL params
+  const preSelectedServerId = searchParams.get('serverId');
+  const preSelectedSupervisorId = searchParams.get('supervisorId');
+
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const { data: existingAgent, isLoading: isLoadingAgent } = useAgent(id || '', {
     enabled: isEditing,
   });
   const { data: serversData } = useServers();
   const servers = serversData?.items || [];
+
+  // Get pre-selected server info for hierarchy display
+  const { data: preSelectedServer } = useServer(preSelectedServerId || '', {
+    enabled: !!preSelectedServerId,
+  });
+
+  // Get pre-selected supervisor info for hierarchy display
+  const { data: preSelectedSupervisor } = useAgent(preSelectedSupervisorId || '', {
+    enabled: !!preSelectedSupervisorId,
+  });
 
   const createAgent = useCreateAgent();
   const updateAgent = useUpdateAgent();
@@ -112,10 +251,30 @@ export default function CreateAgent() {
   } = useForm<AgentFormData>({
     resolver: zodResolver(agentSchema),
     defaultValues: {
-      role: 'WORKER',
+      role: preSelectedSupervisorId ? 'WORKER' : 'WORKER',
+      serverId: preSelectedServerId || '',
+      supervisorId: preSelectedSupervisorId || '',
       capabilities: [],
+      promptTemplate: '',
+      promptVariables: {},
     },
   });
+
+  // Set form values from URL params when they're available
+  useEffect(() => {
+    if (preSelectedServerId && !isEditing) {
+      setValue('serverId', preSelectedServerId);
+    }
+    if (preSelectedSupervisorId && !isEditing) {
+      setValue('supervisorId', preSelectedSupervisorId);
+      // If supervisor is provided, agent should be worker or supervisor
+      if (preSelectedSupervisor?.role === 'MASTER') {
+        setValue('role', 'SUPERVISOR');
+      } else if (preSelectedSupervisor?.role === 'SUPERVISOR') {
+        setValue('role', 'WORKER');
+      }
+    }
+  }, [preSelectedServerId, preSelectedSupervisorId, preSelectedSupervisor, isEditing, setValue]);
 
   const selectedServerId = watch('serverId');
   const selectedRole = watch('role');
@@ -199,9 +358,35 @@ export default function CreateAgent() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* Hierarchy Breadcrumb */}
+      {(preSelectedServerId || preSelectedSupervisorId) && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+          <Server className="h-4 w-4" />
+          {preSelectedServer ? (
+            <Link to="/servers" className="hover:text-foreground transition-colors">
+              {preSelectedServer.name}
+            </Link>
+          ) : (
+            <span>Server</span>
+          )}
+          <ChevronRight className="h-4 w-4" />
+          {preSelectedSupervisor ? (
+            <>
+              <Bot className="h-4 w-4" />
+              <Link to={`/agents/${preSelectedSupervisor.id}`} className="hover:text-foreground transition-colors">
+                {preSelectedSupervisor.displayName}
+              </Link>
+              <ChevronRight className="h-4 w-4" />
+            </>
+          ) : null}
+          <Bot className="h-4 w-4 text-primary" />
+          <span className="text-foreground font-medium">New Agent</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/agents')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate(preSelectedSupervisorId ? `/agents/${preSelectedSupervisorId}` : preSelectedServerId ? '/servers' : '/agents')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -211,7 +396,11 @@ export default function CreateAgent() {
           <p className="text-muted-foreground">
             {isEditing
               ? 'Update agent configuration'
-              : 'Configure a new AI agent for your server'}
+              : preSelectedSupervisor
+                ? `Add a subordinate to ${preSelectedSupervisor.displayName}`
+                : preSelectedServer
+                  ? `Add an agent to ${preSelectedServer.name}`
+                  : 'Configure a new AI agent for your server'}
           </p>
         </div>
       </div>
@@ -514,8 +703,147 @@ export default function CreateAgent() {
           </div>
         )}
 
-        {/* Step 4: Review */}
+        {/* Step 4: Prompt Template */}
         {currentStep === 3 && (
+          <div className="space-y-6 p-6 border rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-lg">Prompt Template</h2>
+                <p className="text-sm text-muted-foreground">
+                  Define how this agent should behave using a system prompt
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                {showPreview ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                {showPreview ? 'Edit' : 'Preview'}
+              </Button>
+            </div>
+
+            {!showPreview ? (
+              <>
+                {/* Template Selection */}
+                <div className="space-y-3">
+                  <Label>Choose a Template</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {promptTemplates.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedTemplateId(template.id);
+                          setValue('promptTemplate', template.template);
+                          // Initialize variables
+                          const vars: Record<string, string> = {};
+                          template.variables.forEach((v) => {
+                            vars[v] = formValues.promptVariables?.[v] || '';
+                          });
+                          setValue('promptVariables', vars);
+                        }}
+                        className={cn(
+                          'p-4 rounded-lg border text-left transition-all hover:border-primary/50',
+                          selectedTemplateId === template.id
+                            ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                            : ''
+                        )}
+                      >
+                        <span className="text-2xl mb-2 block">{template.icon}</span>
+                        <p className="font-medium text-sm">{template.name}</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {template.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Prompt Editor */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="promptTemplate">System Prompt</Label>
+                    {formValues.promptTemplate && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          navigator.clipboard.writeText(formValues.promptTemplate || '');
+                        }}
+                      >
+                        <Copy className="w-4 h-4 mr-1" />
+                        Copy
+                      </Button>
+                    )}
+                  </div>
+                  <textarea
+                    id="promptTemplate"
+                    className="w-full min-h-[200px] px-3 py-2 rounded-md border bg-background font-mono text-sm resize-y"
+                    placeholder="Enter your system prompt here... Use {{VARIABLE_NAME}} for dynamic values."
+                    {...register('promptTemplate')}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Use <code className="bg-muted px-1 rounded">{'{{VARIABLE_NAME}}'}</code> syntax for dynamic values
+                  </p>
+                </div>
+
+                {/* Variable Values */}
+                {selectedTemplateId && selectedTemplateId !== 'custom' && (
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Template Variables
+                    </Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                      {promptTemplates
+                        .find((t) => t.id === selectedTemplateId)
+                        ?.variables.map((variable) => (
+                          <div key={variable} className="space-y-1">
+                            <Label htmlFor={`var-${variable}`} className="text-xs font-mono">
+                              {variable}
+                            </Label>
+                            <Input
+                              id={`var-${variable}`}
+                              placeholder={`Enter ${variable.toLowerCase().replace(/_/g, ' ')}`}
+                              value={formValues.promptVariables?.[variable] || ''}
+                              onChange={(e) => {
+                                setValue('promptVariables', {
+                                  ...formValues.promptVariables,
+                                  [variable]: e.target.value,
+                                });
+                              }}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Preview Mode */
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <h3 className="font-medium text-sm mb-2">Resolved Prompt Preview</h3>
+                  <pre className="whitespace-pre-wrap text-sm font-mono bg-background p-4 rounded border max-h-[400px] overflow-auto">
+                    {formValues.promptTemplate
+                      ? Object.entries(formValues.promptVariables || {}).reduce(
+                          (text, [key, value]) =>
+                            text.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value || `[${key}]`),
+                          formValues.promptTemplate
+                        )
+                      : 'No prompt template defined'}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5: Review */}
+        {currentStep === 4 && (
           <div className="space-y-6 p-6 border rounded-lg">
             <h2 className="font-semibold text-lg">Review Configuration</h2>
 
@@ -588,6 +916,35 @@ export default function CreateAgent() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {formValues.promptTemplate && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Prompt Template
+                  {selectedTemplateId && selectedTemplateId !== 'custom' && (
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                      {promptTemplates.find((t) => t.id === selectedTemplateId)?.name}
+                    </span>
+                  )}
+                </p>
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <pre className="text-xs font-mono whitespace-pre-wrap max-h-[150px] overflow-auto">
+                    {formValues.promptTemplate.slice(0, 300)}
+                    {formValues.promptTemplate.length > 300 && '...'}
+                  </pre>
+                </div>
+                {Object.keys(formValues.promptVariables || {}).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(formValues.promptVariables || {}).map(([key, value]) => (
+                      <span key={key} className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                        {key}: {value || '(empty)'}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

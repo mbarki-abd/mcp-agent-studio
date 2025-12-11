@@ -7,13 +7,43 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
 
 type EventCallback<T> = (event: T) => void;
 
+// Chat streaming events
+export interface ChatStreamStartEvent {
+  sessionId: string;
+  messageId: string;
+  userMessageId: string;
+}
+
+export interface ChatStreamChunkEvent {
+  sessionId: string;
+  messageId: string;
+  chunk: string;
+  accumulated: string;
+}
+
+export interface ChatStreamEndEvent {
+  sessionId: string;
+  messageId: string;
+  content: string;
+  toolCalls?: Array<{
+    name: string;
+    params: Record<string, unknown>;
+    result?: string;
+  }>;
+}
+
 interface WebSocketContextValue {
   isConnected: boolean;
   subscribe: (type: 'agent' | 'server', id: string) => void;
   unsubscribe: (type: 'agent' | 'server', id: string) => void;
+  subscribeToChat: (sessionId: string) => void;
+  unsubscribeFromChat: (sessionId: string) => void;
   onAgentStatus: (callback: EventCallback<AgentStatusEvent>) => () => void;
   onTodoProgress: (callback: EventCallback<TodoProgressEvent>) => () => void;
   onExecution: (callback: EventCallback<ExecutionStreamEvent>) => () => void;
+  onChatStreamStart: (callback: EventCallback<ChatStreamStartEvent>) => () => void;
+  onChatStreamChunk: (callback: EventCallback<ChatStreamChunkEvent>) => () => void;
+  onChatStreamEnd: (callback: EventCallback<ChatStreamEndEvent>) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -30,9 +60,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const agentStatusListeners = useRef<Set<EventCallback<AgentStatusEvent>>>(new Set());
   const todoProgressListeners = useRef<Set<EventCallback<TodoProgressEvent>>>(new Set());
   const executionListeners = useRef<Set<EventCallback<ExecutionStreamEvent>>>(new Set());
+  const chatStreamStartListeners = useRef<Set<EventCallback<ChatStreamStartEvent>>>(new Set());
+  const chatStreamChunkListeners = useRef<Set<EventCallback<ChatStreamChunkEvent>>>(new Set());
+  const chatStreamEndListeners = useRef<Set<EventCallback<ChatStreamEndEvent>>>(new Set());
 
   // Current subscriptions
   const subscriptions = useRef<Set<string>>(new Set());
+  const chatSubscriptions = useRef<Set<string>>(new Set());
 
   // Initialize socket connection
   useEffect(() => {
@@ -74,6 +108,19 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
     socket.on('agent:execution', (event: ExecutionStreamEvent) => {
       executionListeners.current.forEach(cb => cb(event));
+    });
+
+    // Chat streaming events
+    socket.on('chat:stream:start', (event: ChatStreamStartEvent) => {
+      chatStreamStartListeners.current.forEach(cb => cb(event));
+    });
+
+    socket.on('chat:stream:chunk', (event: ChatStreamChunkEvent) => {
+      chatStreamChunkListeners.current.forEach(cb => cb(event));
+    });
+
+    socket.on('chat:stream:end', (event: ChatStreamEndEvent) => {
+      chatStreamEndListeners.current.forEach(cb => cb(event));
     });
 
     return () => {
@@ -121,13 +168,56 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     };
   }, []);
 
+  // Chat subscriptions
+  const subscribeToChat = useCallback((sessionId: string) => {
+    if (chatSubscriptions.current.has(sessionId)) return;
+
+    chatSubscriptions.current.add(sessionId);
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('subscribe:chat', { sessionId });
+    }
+  }, []);
+
+  const unsubscribeFromChat = useCallback((sessionId: string) => {
+    chatSubscriptions.current.delete(sessionId);
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('unsubscribe:chat', { sessionId });
+    }
+  }, []);
+
+  const onChatStreamStart = useCallback((callback: EventCallback<ChatStreamStartEvent>) => {
+    chatStreamStartListeners.current.add(callback);
+    return () => {
+      chatStreamStartListeners.current.delete(callback);
+    };
+  }, []);
+
+  const onChatStreamChunk = useCallback((callback: EventCallback<ChatStreamChunkEvent>) => {
+    chatStreamChunkListeners.current.add(callback);
+    return () => {
+      chatStreamChunkListeners.current.delete(callback);
+    };
+  }, []);
+
+  const onChatStreamEnd = useCallback((callback: EventCallback<ChatStreamEndEvent>) => {
+    chatStreamEndListeners.current.add(callback);
+    return () => {
+      chatStreamEndListeners.current.delete(callback);
+    };
+  }, []);
+
   const value: WebSocketContextValue = {
     isConnected,
     subscribe,
     unsubscribe,
+    subscribeToChat,
+    unsubscribeFromChat,
     onAgentStatus,
     onTodoProgress,
     onExecution,
+    onChatStreamStart,
+    onChatStreamChunk,
+    onChatStreamEnd,
   };
 
   return (
@@ -198,4 +288,39 @@ export function useExecutionStream(callback: EventCallback<ExecutionStreamEvent>
   useEffect(() => {
     return onExecution(callback);
   }, [callback, onExecution]);
+}
+
+// Chat streaming hooks
+export function useChatSubscription(sessionId: string | undefined) {
+  const { subscribeToChat, unsubscribeFromChat } = useWebSocket();
+
+  useEffect(() => {
+    if (!sessionId) return;
+    subscribeToChat(sessionId);
+    return () => unsubscribeFromChat(sessionId);
+  }, [sessionId, subscribeToChat, unsubscribeFromChat]);
+}
+
+export function useChatStreamStart(callback: EventCallback<ChatStreamStartEvent>) {
+  const { onChatStreamStart } = useWebSocket();
+
+  useEffect(() => {
+    return onChatStreamStart(callback);
+  }, [callback, onChatStreamStart]);
+}
+
+export function useChatStreamChunk(callback: EventCallback<ChatStreamChunkEvent>) {
+  const { onChatStreamChunk } = useWebSocket();
+
+  useEffect(() => {
+    return onChatStreamChunk(callback);
+  }, [callback, onChatStreamChunk]);
+}
+
+export function useChatStreamEnd(callback: EventCallback<ChatStreamEndEvent>) {
+  const { onChatStreamEnd } = useWebSocket();
+
+  useEffect(() => {
+    return onChatStreamEnd(callback);
+  }, [callback, onChatStreamEnd]);
 }

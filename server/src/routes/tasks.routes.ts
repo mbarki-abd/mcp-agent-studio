@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
+import { getTaskExecutionService } from '../services/task-execution.service.js';
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
@@ -24,6 +25,7 @@ const createTaskSchema = z.object({
   timeout: z.number().optional(),
   maxRetries: z.number().optional(),
   retryDelay: z.number().optional(),
+  dependsOnIds: z.array(z.string().uuid()).optional(),
 });
 
 const updateTaskSchema = createTaskSchema.partial().extend({
@@ -137,6 +139,24 @@ export async function taskRoutes(fastify: FastifyInstance) {
       nextRunAt = new Date(body.startDate);
     }
 
+    // Validate dependencies exist and belong to user
+    if (body.dependsOnIds && body.dependsOnIds.length > 0) {
+      const deps = await prisma.task.findMany({
+        where: {
+          id: { in: body.dependsOnIds },
+          createdById: userId,
+        },
+        select: { id: true },
+      });
+      const foundIds = deps.map(d => d.id);
+      const missingIds = body.dependsOnIds.filter(id => !foundIds.includes(id));
+      if (missingIds.length > 0) {
+        return reply.status(400).send({
+          error: `Dependencies not found: ${missingIds.join(', ')}`
+        });
+      }
+    }
+
     const task = await prisma.task.create({
       data: {
         title: body.title,
@@ -163,6 +183,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
         retryDelay: body.retryDelay || 60000,
         createdById: userId,
         nextRunAt,
+        dependsOnIds: body.dependsOnIds || [],
       },
     });
 
@@ -172,6 +193,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
       status: task.status,
       executionMode: task.executionMode,
       nextRunAt: task.nextRunAt,
+      dependsOnIds: task.dependsOnIds,
     };
   });
 
@@ -212,6 +234,23 @@ export async function taskRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Task not found' });
     }
 
+    // Manually fetch dependency tasks
+    const dependsOn = task.dependsOnIds.length > 0
+      ? await prisma.task.findMany({
+          where: { id: { in: task.dependsOnIds } },
+          select: { id: true, title: true, status: true },
+        })
+      : [];
+
+    // Manually fetch dependent tasks (tasks that depend on this one)
+    const dependentTasks = await prisma.task.findMany({
+      where: {
+        dependsOnIds: { has: id },
+        createdById: userId,
+      },
+      select: { id: true, title: true, status: true },
+    });
+
     return {
       id: task.id,
       title: task.title,
@@ -238,6 +277,9 @@ export async function taskRoutes(fastify: FastifyInstance) {
       lastRunAt: task.lastRunAt,
       nextRunAt: task.nextRunAt,
       runCount: task.runCount,
+      dependsOnIds: task.dependsOnIds,
+      dependsOn,
+      dependentTasks,
       executions: task.executions,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
@@ -326,47 +368,87 @@ export async function taskRoutes(fastify: FastifyInstance) {
     const { userId } = request.user as { userId: string };
     const { id } = request.params as { id: string };
 
-    const task = await prisma.task.findFirst({
-      where: { id, createdById: userId },
-      include: { agent: true },
-    });
+    try {
+      const executionService = getTaskExecutionService();
+      const result = await executionService.executeTask(id, userId);
 
-    if (!task) {
-      return reply.status(404).send({ error: 'Task not found' });
-    }
-
-    if (!task.agentId || !task.agent) {
-      return reply.status(400).send({ error: 'Task has no assigned agent' });
-    }
-
-    if (task.agent.status !== 'ACTIVE') {
-      return reply.status(400).send({ error: 'Agent is not active' });
-    }
-
-    // Create execution record
-    const execution = await prisma.taskExecution.create({
-      data: {
+      return {
+        success: result.success,
         taskId: id,
-        agentId: task.agentId,
-        status: 'QUEUED',
-        prompt: task.prompt,
-      },
-    });
+        output: result.output,
+        error: result.error,
+        tokensUsed: result.tokensUsed,
+        durationMs: result.durationMs,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Execution failed';
+      return reply.status(400).send({ error: message });
+    }
+  });
 
-    // Update task status
-    await prisma.task.update({
-      where: { id },
-      data: { status: 'QUEUED' },
-    });
+  // Execute prompt directly on an agent
+  fastify.post('/execute-prompt', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Execute a prompt directly on an agent without creating a task',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      serverId: z.string().uuid(),
+      agentId: z.string().uuid(),
+      prompt: z.string().min(1),
+    }).parse(request.body);
 
-    // TODO: Send to execution queue
+    try {
+      const executionService = getTaskExecutionService();
+      const result = await executionService.executePrompt(
+        body.serverId,
+        body.agentId,
+        body.prompt
+      );
 
-    return {
-      executionId: execution.id,
-      taskId: task.id,
-      status: 'QUEUED',
-      message: 'Task queued for execution',
-    };
+      return {
+        success: result.success,
+        output: result.output,
+        error: result.error,
+        tokensUsed: result.tokensUsed,
+        durationMs: result.durationMs,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Execution failed';
+      return reply.status(400).send({ error: message });
+    }
+  });
+
+  // Retry a failed execution
+  fastify.post('/executions/:executionId/retry', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Retry a failed execution',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const { executionId } = request.params as { executionId: string };
+
+    try {
+      const executionService = getTaskExecutionService();
+      const result = await executionService.retryExecution(executionId, userId);
+
+      return {
+        success: result.success,
+        output: result.output,
+        error: result.error,
+        tokensUsed: result.tokensUsed,
+        durationMs: result.durationMs,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Retry failed';
+      return reply.status(400).send({ error: message });
+    }
   });
 
   // Cancel task execution
@@ -458,6 +540,177 @@ export async function taskRoutes(fastify: FastifyInstance) {
         startedAt: e.startedAt,
         completedAt: e.completedAt,
       })),
+    };
+  });
+
+  // Check task dependencies status
+  fastify.get('/:id/dependencies', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Check task dependencies status',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const { id } = request.params as { id: string };
+
+    const task = await prisma.task.findFirst({
+      where: { id, createdById: userId },
+    });
+
+    if (!task) {
+      return reply.status(404).send({ error: 'Task not found' });
+    }
+
+    // Manually fetch dependency tasks
+    const dependsOn = task.dependsOnIds.length > 0
+      ? await prisma.task.findMany({
+          where: { id: { in: task.dependsOnIds } },
+          select: { id: true, title: true, status: true },
+        })
+      : [];
+
+    // Manually fetch dependent tasks
+    const dependentTasks = await prisma.task.findMany({
+      where: {
+        dependsOnIds: { has: id },
+        createdById: userId,
+      },
+      select: { id: true, title: true, status: true },
+    });
+
+    const completedDeps = dependsOn.filter(d => d.status === 'COMPLETED');
+    const pendingDeps = dependsOn.filter(d => d.status !== 'COMPLETED');
+
+    return {
+      taskId: task.id,
+      canExecute: pendingDeps.length === 0,
+      dependencies: {
+        total: dependsOn.length,
+        completed: completedDeps.length,
+        pending: pendingDeps.length,
+        items: dependsOn,
+      },
+      dependentTasks: {
+        total: dependentTasks.length,
+        items: dependentTasks,
+      },
+    };
+  });
+
+  // Add dependencies to a task
+  fastify.post('/:id/dependencies', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Add dependencies to a task',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const { id } = request.params as { id: string };
+    const body = z.object({
+      dependsOnIds: z.array(z.string().uuid()).min(1),
+    }).parse(request.body);
+
+    const task = await prisma.task.findFirst({
+      where: { id, createdById: userId },
+    });
+
+    if (!task) {
+      return reply.status(404).send({ error: 'Task not found' });
+    }
+
+    // Validate dependencies exist and belong to user
+    const deps = await prisma.task.findMany({
+      where: {
+        id: { in: body.dependsOnIds },
+        createdById: userId,
+      },
+      select: { id: true },
+    });
+
+    const foundIds = deps.map(d => d.id);
+    const missingIds = body.dependsOnIds.filter(depId => !foundIds.includes(depId));
+    if (missingIds.length > 0) {
+      return reply.status(400).send({
+        error: `Dependencies not found: ${missingIds.join(', ')}`
+      });
+    }
+
+    // Prevent circular dependencies
+    if (body.dependsOnIds.includes(id)) {
+      return reply.status(400).send({ error: 'Task cannot depend on itself' });
+    }
+
+    // Merge with existing dependencies
+    const existingIds = task.dependsOnIds as string[];
+    const newIds = [...new Set([...existingIds, ...body.dependsOnIds])];
+
+    const updated = await prisma.task.update({
+      where: { id },
+      data: { dependsOnIds: newIds },
+    });
+
+    // Manually fetch dependency tasks for response
+    const dependsOn = newIds.length > 0
+      ? await prisma.task.findMany({
+          where: { id: { in: newIds } },
+          select: { id: true, title: true, status: true },
+        })
+      : [];
+
+    return {
+      taskId: updated.id,
+      dependsOnIds: updated.dependsOnIds,
+      dependsOn,
+    };
+  });
+
+  // Remove dependencies from a task
+  fastify.delete('/:id/dependencies', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Remove dependencies from a task',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const { id } = request.params as { id: string };
+    const body = z.object({
+      dependsOnIds: z.array(z.string().uuid()).min(1),
+    }).parse(request.body);
+
+    const task = await prisma.task.findFirst({
+      where: { id, createdById: userId },
+    });
+
+    if (!task) {
+      return reply.status(404).send({ error: 'Task not found' });
+    }
+
+    const existingIds = task.dependsOnIds as string[];
+    const newIds = existingIds.filter(depId => !body.dependsOnIds.includes(depId));
+
+    const updated = await prisma.task.update({
+      where: { id },
+      data: { dependsOnIds: newIds },
+    });
+
+    // Manually fetch dependency tasks for response
+    const dependsOn = newIds.length > 0
+      ? await prisma.task.findMany({
+          where: { id: { in: newIds } },
+          select: { id: true, title: true, status: true },
+        })
+      : [];
+
+    return {
+      taskId: updated.id,
+      dependsOnIds: updated.dependsOnIds,
+      dependsOn,
     };
   });
 }

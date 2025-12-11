@@ -115,6 +115,25 @@ export function ServerCard({
         </p>
       )}
 
+      {/* Capabilities */}
+      {server.capabilities && Array.isArray(server.capabilities) && server.capabilities.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {(server.capabilities as string[]).slice(0, 4).map((cap, idx) => (
+            <span
+              key={idx}
+              className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700"
+            >
+              {cap}
+            </span>
+          ))}
+          {(server.capabilities as string[]).length > 4 && (
+            <span className="text-xs text-muted-foreground">
+              +{(server.capabilities as string[]).length - 4} more
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
         <span>

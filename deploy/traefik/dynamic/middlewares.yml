@@ -1,52 +1,50 @@
 # Traefik Dynamic Configuration - Middlewares
-
 http:
   middlewares:
-    # Rate limiting for API
+    # API Rate Limiting
     api-ratelimit:
       rateLimit:
         average: 100
         burst: 50
         period: 1m
 
-    # Security headers for API
+    # Security Headers for API
     api-headers:
       headers:
-        customResponseHeaders:
-          X-Content-Type-Options: "nosniff"
-          X-Frame-Options: "DENY"
-          X-XSS-Protection: "1; mode=block"
-          Referrer-Policy: "strict-origin-when-cross-origin"
         accessControlAllowMethods:
-          - GET
-          - POST
-          - PUT
-          - PATCH
-          - DELETE
-          - OPTIONS
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowOriginList:
+          - "https://${DOMAIN}"
         accessControlAllowHeaders:
-          - Content-Type
-          - Authorization
-          - X-Requested-With
-        accessControlMaxAge: 100
+          - "Authorization"
+          - "Content-Type"
+        accessControlMaxAge: 86400
         addVaryHeader: true
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
 
-    # Security headers for Dashboard
+    # Security Headers for Dashboard
     dashboard-headers:
       headers:
-        customResponseHeaders:
-          X-Content-Type-Options: "nosniff"
-          X-Frame-Options: "SAMEORIGIN"
-          X-XSS-Protection: "1; mode=block"
-          Referrer-Policy: "strict-origin-when-cross-origin"
-          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.* wss://api.*"
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        customFrameOptionsValue: "SAMEORIGIN"
 
     # Compression
     compress:
-      compress: {}
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
 
     # Retry on failure
     retry:

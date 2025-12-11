@@ -41,7 +41,7 @@ export interface ExecutionStreamEvent {
   executionId: string;
   timestamp: Date;
   data: {
-    phase: 'starting' | 'running' | 'completed' | 'failed';
+    phase: 'starting' | 'running' | 'completed' | 'failed' | 'queued' | 'cancelled';
     output?: string;
     toolCall?: {
       name: string;
@@ -66,7 +66,45 @@ export interface ServerStatusEvent {
   };
 }
 
-export type RealtimeEvent = AgentStatusEvent | TodoProgressEvent | ExecutionStreamEvent | ServerStatusEvent;
+export interface ServerToolEvent {
+  type: 'server:tool';
+  serverId: string;
+  timestamp: Date;
+  data: {
+    toolName: string;
+    status: 'INSTALLED' | 'UNINSTALLED' | 'INSTALLING' | 'FAILED';
+  };
+}
+
+export interface TaskProgressEvent {
+  type: 'task:progress';
+  taskId: string;
+  executionId: string;
+  timestamp: Date;
+  data: {
+    progress: number;
+    message?: string;
+  };
+}
+
+export interface TerminalOutputEvent {
+  type: 'terminal:output';
+  executionId: string;
+  timestamp: Date;
+  data: {
+    output: string;
+    isError: boolean;
+  };
+}
+
+export type RealtimeEvent =
+  | AgentStatusEvent
+  | TodoProgressEvent
+  | ExecutionStreamEvent
+  | ServerStatusEvent
+  | ServerToolEvent
+  | TaskProgressEvent
+  | TerminalOutputEvent;
 
 export interface ClientMessage {
   action: 'subscribe' | 'unsubscribe';

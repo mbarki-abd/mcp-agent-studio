@@ -1,5 +1,12 @@
-// Seed test data for visual testing
-const API_URL = 'http://localhost:3000';
+// Seed test data for visual testing and E2E tests
+const API_URL = process.env.API_URL || 'http://localhost:3000';
+
+// Standard test user used by all E2E tests
+const TEST_USER = {
+  email: 'test@example.com',
+  password: 'password123',
+  name: 'Test User'
+};
 
 const ADMIN_USER = {
   email: 'mbarki@ilinqsoft.com',
@@ -10,8 +17,23 @@ const ADMIN_USER = {
 async function seedTestData() {
   console.log('🌱 Seeding test data...\n');
 
-  // First, try to register admin user
-  console.log('1. Creating admin user...');
+  // First, try to register test user (used by E2E tests)
+  console.log('1. Creating test user...');
+  const testUserRes = await fetch(`${API_URL}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(TEST_USER)
+  });
+
+  if (testUserRes.ok) {
+    console.log('   ✅ Test user created');
+  } else {
+    const err = await testUserRes.text();
+    console.log('   ℹ️ Test user response:', err.substring(0, 100));
+  }
+
+  // Also create admin user
+  console.log('   Creating admin user...');
   const registerRes = await fetch(`${API_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,19 +44,31 @@ async function seedTestData() {
     console.log('   ✅ Admin user created');
   } else {
     const err = await registerRes.text();
-    console.log('   ℹ️ Register response:', err.substring(0, 100));
+    console.log('   ℹ️ Admin user response:', err.substring(0, 100));
   }
 
-  // Login
+  // Login with test user (or admin if test fails)
   console.log('2. Logging in...');
-  const loginRes = await fetch(`${API_URL}/api/auth/login`, {
+  let loginRes = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      email: ADMIN_USER.email,
-      password: ADMIN_USER.password
+      email: TEST_USER.email,
+      password: TEST_USER.password
     })
   });
+
+  // Fallback to admin user if test user doesn't work
+  if (!loginRes.ok) {
+    loginRes = await fetch(`${API_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: ADMIN_USER.email,
+        password: ADMIN_USER.password
+      })
+    });
+  }
 
   const loginData = await loginRes.json().catch(() => ({}));
   const token = loginData.token || loginData.accessToken;

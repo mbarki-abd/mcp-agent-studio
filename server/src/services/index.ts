@@ -6,3 +6,6 @@ export { ToolsService } from './tools.service.js';
 export { MonitoringService } from './monitoring.service.js';
 export { SchedulerService, getScheduler } from './scheduler.service.js';
 export { MasterAgentService, getMasterAgentService } from './master-agent.service.js';
+export { TaskExecutionService, getTaskExecutionService } from './task-execution.service.js';
+export { ToolInstallationService, getToolInstallationService } from './tool-installation.service.js';
+export { MCPClient, getMCPClient } from './mcp-client.js';

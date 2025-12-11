@@ -152,6 +152,10 @@ async function registerRoutes() {
   const { toolRoutes } = await import('./routes/tools.routes.js');
   await fastify.register(toolRoutes, { prefix: '/api/tools' });
 
+  // Chat routes
+  const { chatRoutes } = await import('./routes/chat.routes.js');
+  await fastify.register(chatRoutes, { prefix: '/api/chat' });
+
   // WebSocket routes (monitoring)
   const { websocketRoutes } = await import('./websocket/routes.js');
   await fastify.register(websocketRoutes, { prefix: '/api/monitoring' });
@@ -210,6 +214,17 @@ async function start() {
       socket.on('unsubscribe:server', ({ id }) => {
         socket.leave(`server:${id}`);
         fastify.log.info(`Socket ${socket.id} unsubscribed from server:${id}`);
+      });
+
+      // Chat subscriptions
+      socket.on('subscribe:chat', ({ sessionId }) => {
+        socket.join(`chat:${sessionId}`);
+        fastify.log.info(`Socket ${socket.id} subscribed to chat:${sessionId}`);
+      });
+
+      socket.on('unsubscribe:chat', ({ sessionId }) => {
+        socket.leave(`chat:${sessionId}`);
+        fastify.log.info(`Socket ${socket.id} unsubscribed from chat:${sessionId}`);
       });
 
       socket.on('disconnect', () => {
