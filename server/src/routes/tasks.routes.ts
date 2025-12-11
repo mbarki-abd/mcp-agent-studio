@@ -369,6 +369,55 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
+  // Cancel task execution
+  fastify.post('/:id/cancel', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Cancel a running or queued task',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = request.user as { userId: string };
+    const { id } = request.params as { id: string };
+
+    const task = await prisma.task.findFirst({
+      where: { id, createdById: userId },
+    });
+
+    if (!task) {
+      return reply.status(404).send({ error: 'Task not found' });
+    }
+
+    if (task.status !== 'RUNNING' && task.status !== 'QUEUED') {
+      return reply.status(400).send({ error: 'Task is not running or queued' });
+    }
+
+    // Update task status
+    await prisma.task.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
+
+    // Cancel any running executions
+    await prisma.taskExecution.updateMany({
+      where: {
+        taskId: id,
+        status: { in: ['RUNNING', 'QUEUED'] }
+      },
+      data: {
+        status: 'CANCELLED',
+        completedAt: new Date(),
+      },
+    });
+
+    return {
+      taskId: id,
+      status: 'CANCELLED',
+      message: 'Task cancelled successfully',
+    };
+  });
+
   // Get task executions
   fastify.get('/:id/executions', {
     schema: {

@@ -5,11 +5,14 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import websocket from '@fastify/websocket';
+import fastifySocketIO from 'fastify-socket.io';
 import { PrismaClient } from '@prisma/client';
 import 'dotenv/config';
 
 import authPlugin from './middleware/auth.middleware.js';
+import rbacPlugin from './middleware/rbac.middleware.js';
+import errorHandlerPlugin from './middleware/error.middleware.js';
+import { getScheduler } from './services/scheduler.service.js';
 
 // Initialize Prisma
 export const prisma = new PrismaClient();
@@ -29,6 +32,9 @@ const fastify = Fastify({
 
 // Register plugins
 async function registerPlugins() {
+  // Error handler (register early)
+  await fastify.register(errorHandlerPlugin);
+
   // CORS
   await fastify.register(cors, {
     origin: process.env.CORS_ORIGIN || '*',
@@ -54,8 +60,16 @@ async function registerPlugins() {
   // Auth plugin (must be after JWT)
   await fastify.register(authPlugin);
 
-  // WebSocket
-  await fastify.register(websocket);
+  // RBAC plugin (must be after Auth)
+  await fastify.register(rbacPlugin);
+
+  // Socket.IO
+  await fastify.register(fastifySocketIO, {
+    cors: {
+      origin: process.env.CORS_ORIGIN || '*',
+      credentials: true,
+    },
+  });
 
   // Swagger documentation
   await fastify.register(swagger, {
@@ -156,6 +170,16 @@ async function start() {
     // Register routes
     await registerRoutes();
 
+    // Initialize scheduler service (requires Redis)
+    try {
+      const scheduler = getScheduler();
+      await scheduler.initialize();
+      fastify.log.info('Scheduler service initialized');
+    } catch (err) {
+      fastify.log.warn('Scheduler service failed to initialize (Redis may not be available)');
+      fastify.log.warn(err instanceof Error ? err.message : 'Unknown error');
+    }
+
     // Start listening
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
@@ -163,6 +187,35 @@ async function start() {
     await fastify.listen({ port, host });
     fastify.log.info(`Server running at http://${host}:${port}`);
     fastify.log.info(`API docs at http://${host}:${port}/docs`);
+
+    // Initialize Socket.IO handlers
+    fastify.io.on('connection', (socket) => {
+      fastify.log.info(`Socket connected: ${socket.id}`);
+
+      socket.on('subscribe:agent', ({ id }) => {
+        socket.join(`agent:${id}`);
+        fastify.log.info(`Socket ${socket.id} subscribed to agent:${id}`);
+      });
+
+      socket.on('unsubscribe:agent', ({ id }) => {
+        socket.leave(`agent:${id}`);
+        fastify.log.info(`Socket ${socket.id} unsubscribed from agent:${id}`);
+      });
+
+      socket.on('subscribe:server', ({ id }) => {
+        socket.join(`server:${id}`);
+        fastify.log.info(`Socket ${socket.id} subscribed to server:${id}`);
+      });
+
+      socket.on('unsubscribe:server', ({ id }) => {
+        socket.leave(`server:${id}`);
+        fastify.log.info(`Socket ${socket.id} unsubscribed from server:${id}`);
+      });
+
+      socket.on('disconnect', () => {
+        fastify.log.info(`Socket disconnected: ${socket.id}`);
+      });
+    });
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -174,6 +227,16 @@ const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, shutting down...`);
+
+    // Shutdown scheduler
+    try {
+      const scheduler = getScheduler();
+      await scheduler.shutdown();
+      fastify.log.info('Scheduler service shut down');
+    } catch (err) {
+      fastify.log.warn('Failed to shutdown scheduler');
+    }
+
     await fastify.close();
     await prisma.$disconnect();
     process.exit(0);

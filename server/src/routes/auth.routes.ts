@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../index.js';
 
 // Validation schemas
@@ -71,14 +72,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       },
     });
 
+    // Generate unique JWT ID to prevent token collisions
+    const jti = crypto.randomUUID();
+
     // Generate tokens
     const token = fastify.jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, role: user.role, jti },
       { expiresIn: '7d' }
     );
 
     const refreshToken = fastify.jwt.sign(
-      { userId: user.id, type: 'refresh' },
+      { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
       { expiresIn: '30d' }
     );
 
@@ -138,16 +142,24 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
+    // Generate unique JWT ID to prevent token collisions
+    const jti = crypto.randomUUID();
+
     // Generate tokens
     const token = fastify.jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, role: user.role, jti },
       { expiresIn: '7d' }
     );
 
     const refreshToken = fastify.jwt.sign(
-      { userId: user.id, type: 'refresh' },
+      { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
       { expiresIn: '30d' }
     );
+
+    // Delete existing sessions for this user
+    await prisma.session.deleteMany({
+      where: { userId: user.id },
+    });
 
     // Create session
     await prisma.session.create({

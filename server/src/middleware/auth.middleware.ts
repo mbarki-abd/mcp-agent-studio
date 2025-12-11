@@ -7,6 +7,7 @@ export interface JWTPayload {
   email?: string;
   role?: string;
   type?: string;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -14,6 +15,7 @@ export interface JWTPayload {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    io: import('socket.io').Server;
   }
 }
 

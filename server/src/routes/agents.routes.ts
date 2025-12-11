@@ -13,12 +13,15 @@ const createAgentSchema = z.object({
 });
 
 const updateAgentSchema = z.object({
+  serverId: z.string().uuid().optional(),
   displayName: z.string().min(1).max(100).optional(),
   description: z.string().optional(),
   role: z.enum(['MASTER', 'SUPERVISOR', 'WORKER']).optional(),
   supervisorId: z.string().uuid().nullable().optional(),
   capabilities: z.array(z.string()).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  unixUser: z.string().optional(),
+  homeDir: z.string().optional(),
 });
 
 export async function agentRoutes(fastify: FastifyInstance) {
@@ -176,6 +179,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
 
     return {
       id: agent.id,
+      serverId: agent.serverId,
       server: agent.server,
       name: agent.name,
       displayName: agent.displayName,
@@ -185,6 +189,7 @@ export async function agentRoutes(fastify: FastifyInstance) {
       unixUser: agent.unixUser,
       homeDir: agent.homeDir,
       capabilities: agent.capabilities,
+      supervisorId: agent.supervisorId,
       supervisor: agent.supervisor,
       subordinates: agent.subordinates,
       toolPermissions: agent.toolPermissions.map((tp) => ({

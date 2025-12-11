@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
+import { encrypt, decrypt } from '../utils/crypto.js';
 
 const createServerSchema = z.object({
   name: z.string().min(1),
@@ -98,7 +99,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
         description: body.description,
         url: body.url,
         wsUrl: body.wsUrl || body.url.replace('http', 'ws'),
-        masterToken: body.masterToken, // TODO: Encrypt
+        masterToken: encrypt(body.masterToken),
         isDefault,
         autoConnect: body.autoConnect ?? true,
         status: 'UNKNOWN',
@@ -202,6 +203,7 @@ export async function serverRoutes(fastify: FastifyInstance) {
       where: { id },
       data: {
         ...body,
+        masterToken: body.masterToken ? encrypt(body.masterToken) : undefined,
         wsUrl: body.wsUrl || (body.url ? body.url.replace('http', 'ws') : undefined),
       },
     });
@@ -235,7 +237,20 @@ export async function serverRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Server not found' });
     }
 
-    await prisma.serverConfiguration.delete({ where: { id } });
+    // Delete related records first (cascade delete)
+    await prisma.$transaction(async (tx) => {
+      // Delete server tools
+      await tx.serverTool.deleteMany({ where: { serverId: id } });
+
+      // Delete tasks associated with this server
+      await tx.task.deleteMany({ where: { serverId: id } });
+
+      // Delete agents associated with this server
+      await tx.agent.deleteMany({ where: { serverId: id } });
+
+      // Finally delete the server configuration
+      await tx.serverConfiguration.delete({ where: { id } });
+    });
 
     return { message: 'Server deleted successfully' };
   });
@@ -261,11 +276,14 @@ export async function serverRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      // Decrypt token for use
+      const decryptedToken = decrypt(server.masterToken);
+
       // Test health endpoint
       const response = await fetch(`${server.url}/health`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${server.masterToken}`,
+          'Authorization': `Bearer ${decryptedToken}`,
         },
         signal: AbortSignal.timeout(10000),
       });

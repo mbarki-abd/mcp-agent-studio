@@ -1,6 +1,7 @@
 import { prisma } from '../index.js';
 import { MonitoringService } from './monitoring.service.js';
 import { decrypt } from '../utils/crypto.js';
+import { MCPClient, getMCPClient, removeMCPClient } from './mcp-client.js';
 import type { Agent, ServerConfiguration } from '@prisma/client';
 
 // Types for execution
@@ -35,9 +36,12 @@ export class MasterAgentService {
   private serverId: string;
   private serverConfig: ServerConfiguration | null = null;
   private masterAgent: Agent | null = null;
+  private mcpClient: MCPClient | null = null;
+  private useMCPProtocol: boolean;
 
-  constructor(serverId: string) {
+  constructor(serverId: string, useMCPProtocol = true) {
     this.serverId = serverId;
+    this.useMCPProtocol = useMCPProtocol;
   }
 
   async initialize(): Promise<void> {
@@ -66,6 +70,37 @@ export class MasterAgentService {
           status: 'ACTIVE',
         },
       });
+    }
+
+    // Initialize MCP client if protocol is enabled
+    if (this.useMCPProtocol && this.serverConfig) {
+      try {
+        const masterToken = decrypt(this.serverConfig.masterToken);
+        this.mcpClient = getMCPClient({
+          serverUrl: this.serverConfig.url,
+          wsUrl: this.serverConfig.wsUrl || undefined,
+          token: masterToken,
+          reconnect: true,
+        });
+
+        // Try to connect (non-blocking, will reconnect if fails)
+        this.mcpClient.connect().catch((err) => {
+          console.warn(`MCP connection failed for server ${this.serverId}:`, err.message);
+        });
+      } catch (err) {
+        console.warn(`Failed to initialize MCP client for server ${this.serverId}:`, err);
+      }
+    }
+  }
+
+  /**
+   * Disconnect MCP client and cleanup
+   */
+  async disconnect(): Promise<void> {
+    if (this.mcpClient && this.serverConfig) {
+      const masterToken = decrypt(this.serverConfig.masterToken);
+      removeMCPClient(this.serverConfig.url, masterToken);
+      this.mcpClient = null;
     }
   }
 
@@ -140,13 +175,89 @@ export class MasterAgentService {
     },
     callbacks?: StreamCallback
   ): Promise<{ output: string; tokensUsed?: number }> {
-    // TODO: Implement actual MCP protocol communication
-    // This is a placeholder that simulates execution
+    const monitoring = MonitoringService.getInstance();
 
+    // Try to use MCP client if available and connected
+    if (this.mcpClient && this.mcpClient.connectionState === 'connected') {
+      try {
+        const result = await this.mcpClient.execute(
+          {
+            prompt: request.prompt,
+            agentId: request.agentId,
+          },
+          {
+            onOutput: (chunk) => {
+              callbacks?.onOutput?.(chunk);
+              monitoring.broadcastExecution(request.agentId, 'current-task', 'running', chunk);
+            },
+            onToolCall: (call) => {
+              callbacks?.onToolCall?.(call.name, call.arguments);
+            },
+            onFileChange: (change) => {
+              callbacks?.onFileChange?.(change.path, change.action);
+            },
+            onProgress: (progress, message) => {
+              monitoring.broadcastExecution(request.agentId, 'current-task', 'running', message);
+            },
+          }
+        );
+
+        return {
+          output: result.output,
+          tokensUsed: result.tokensUsed,
+        };
+      } catch (err) {
+        console.warn('MCP execution failed, falling back to HTTP:', err);
+      }
+    }
+
+    // Try HTTP fallback if MCP WebSocket not available
+    if (this.mcpClient) {
+      try {
+        const result = await this.mcpClient.executeHttp(
+          {
+            prompt: request.prompt,
+            agentId: request.agentId,
+          },
+          {
+            onOutput: (chunk) => {
+              callbacks?.onOutput?.(chunk);
+              monitoring.broadcastExecution(request.agentId, 'current-task', 'running', chunk);
+            },
+          }
+        );
+
+        if (result.success) {
+          return {
+            output: result.output,
+            tokensUsed: result.tokensUsed,
+          };
+        }
+        console.warn('HTTP execution failed:', result.error);
+      } catch (err) {
+        console.warn('HTTP execution failed:', err);
+      }
+    }
+
+    // Fallback to simulation if MCP is not available
+    return this.simulateExecution(request, callbacks);
+  }
+
+  /**
+   * Simulate execution (fallback when MCP server is not available)
+   */
+  private async simulateExecution(
+    request: {
+      prompt: string;
+      agentId: string;
+    },
+    callbacks?: StreamCallback
+  ): Promise<{ output: string; tokensUsed?: number }> {
     const monitoring = MonitoringService.getInstance();
 
     // Simulate streaming output
     const outputChunks = [
+      '[Simulation Mode]\n',
       'Analyzing prompt...\n',
       'Executing task...\n',
       'Processing results...\n',
@@ -193,7 +304,7 @@ export class MasterAgentService {
     const timestamp = Date.now();
     const uniqueName = `${params.name}-${timestamp}`;
 
-    // Create agent in database
+    // Create agent in database first
     const agent = await prisma.agent.create({
       data: {
         serverId: this.serverId,
@@ -208,13 +319,42 @@ export class MasterAgentService {
       },
     });
 
-    // TODO: Actually provision the agent on the MCP server
-    // This would involve SSH commands to create Unix user, set up home directory, etc.
+    // Try to provision agent on MCP server
+    if (this.mcpClient && this.mcpClient.connectionState === 'connected') {
+      try {
+        await this.mcpClient.callTool('provision_agent', {
+          agentId: agent.id,
+          name: uniqueName,
+          displayName: params.displayName,
+          role: params.role,
+          capabilities: params.capabilities,
+          supervisorId: params.supervisorId || this.masterAgent?.id,
+        });
+
+        console.log(`Agent ${uniqueName} provisioned on MCP server`);
+      } catch (err) {
+        console.warn(`Failed to provision agent on MCP server:`, err);
+        // Agent is still created in DB, can be provisioned later during validation
+      }
+    }
 
     return agent;
   }
 
   async validateAgent(agentId: string, validatedById: string): Promise<Agent> {
+    // Activate agent on MCP server if connected
+    if (this.mcpClient && this.mcpClient.connectionState === 'connected') {
+      try {
+        await this.mcpClient.callTool('activate_agent', {
+          agentId,
+        });
+        console.log(`Agent ${agentId} activated on MCP server`);
+      } catch (err) {
+        console.warn(`Failed to activate agent on MCP server:`, err);
+        // Continue with database update
+      }
+    }
+
     const agent = await prisma.agent.update({
       where: { id: agentId },
       data: {
@@ -318,6 +458,17 @@ export async function getMasterAgentService(serverId: string): Promise<MasterAge
   return instances.get(serverId)!;
 }
 
-export function clearMasterAgentService(serverId: string): void {
-  instances.delete(serverId);
+export async function clearMasterAgentService(serverId: string): Promise<void> {
+  const service = instances.get(serverId);
+  if (service) {
+    await service.disconnect();
+    instances.delete(serverId);
+  }
+}
+
+export async function clearAllMasterAgentServices(): Promise<void> {
+  for (const [serverId, service] of instances) {
+    await service.disconnect();
+  }
+  instances.clear();
 }
