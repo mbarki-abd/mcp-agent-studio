@@ -1,0 +1,14 @@
+{
+  "name": "@mcp/sample-server",
+  "version": "0.1.0",
+  "description": "Sample MCP server for testing MCP Agent Studio",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
