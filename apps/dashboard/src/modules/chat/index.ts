@@ -14,13 +14,26 @@ export const chatModule: ModuleDefinition = {
 
   routes: [
     {
+      path: '/chat',
+      element: AgentChat,
+      permissions: [{ action: 'execute', subject: 'Agent' }],
+    },
+    {
       path: '/chat/:agentId',
       element: AgentChat,
       permissions: [{ action: 'execute', subject: 'Agent' }],
     },
   ],
 
-  navigation: [],
+  navigation: [
+    {
+      id: 'chat',
+      label: 'Chat',
+      path: '/chat',
+      icon: MessageSquare,
+      permissions: [{ action: 'execute', subject: 'Agent' }],
+    },
+  ],
 
   settings: {
     defaultEnabled: true,

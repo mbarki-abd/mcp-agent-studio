@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Trash2,
   Settings,
+  Users,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import {
@@ -20,7 +21,7 @@ import {
 import { ChatMessage } from '../components/ChatMessage';
 import { ChatInput } from '../components/ChatInput';
 import { useChatStore } from '../stores/chat.store';
-import { useAgent } from '../../../core/api';
+import { useAgent, useAgents } from '../../../core/api';
 import { AgentStatusBadge } from '../../agents/components/AgentStatusBadge';
 
 export default function AgentChat() {
@@ -28,7 +29,13 @@ export default function AgentChat() {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: agent, isLoading: isLoadingAgent, error } = useAgent(agentId || '');
+  // Fetch agents list for selection page
+  const { data: agentsData, isLoading: isLoadingAgents } = useAgents({ status: 'ACTIVE' });
+  const agents = agentsData?.items || [];
+
+  const { data: agent, isLoading: isLoadingAgent, error } = useAgent(agentId || '', {
+    enabled: !!agentId,
+  });
 
   const {
     isStreaming,
@@ -113,6 +120,74 @@ export default function AgentChat() {
     }
   };
 
+  // Show agent selection page if no agentId
+  if (!agentId) {
+    if (isLoadingAgents) {
+      return (
+        <div className="h-full flex items-center justify-center">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <MessageSquare className="h-6 w-6" />
+            Chat with Agents
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Select an agent to start a conversation
+          </p>
+        </div>
+
+        {agents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium">No active agents</h3>
+            <p className="text-muted-foreground mt-1">
+              Create and activate an agent to start chatting
+            </p>
+            <Button onClick={() => navigate('/agents/new')} className="mt-4">
+              Create Agent
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent) => (
+              <button
+                key={agent.id}
+                onClick={() => navigate(`/chat/${agent.id}`)}
+                className="p-4 border rounded-lg text-left hover:bg-muted transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Bot className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{agent.displayName}</span>
+                      <AgentStatusBadge status={agent.status} size="sm" />
+                    </div>
+                    <span className="text-xs text-muted-foreground capitalize">
+                      {agent.role.toLowerCase()}
+                    </span>
+                  </div>
+                </div>
+                {agent.description && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {agent.description}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (isLoadingAgent) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -129,9 +204,9 @@ export default function AgentChat() {
         <p className="text-muted-foreground mt-1">
           {error?.message || 'The agent you are looking for does not exist'}
         </p>
-        <Button onClick={() => navigate('/agents')} className="mt-4">
+        <Button onClick={() => navigate('/chat')} className="mt-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Agents
+          Back to Chat
         </Button>
       </div>
     );
