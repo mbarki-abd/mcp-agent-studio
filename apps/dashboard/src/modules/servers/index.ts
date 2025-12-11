@@ -14,12 +14,12 @@ export const serversModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'servers',
+      path: '/servers',
       element: ServersList,
       permissions: [{ action: 'read', subject: 'ServerConfiguration' }],
     },
     {
-      path: 'servers/new',
+      path: '/servers/new',
       element: CreateServer,
       permissions: [{ action: 'create', subject: 'ServerConfiguration' }],
     },

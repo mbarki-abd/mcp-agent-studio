@@ -14,7 +14,7 @@ export const monitoringModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'monitoring',
+      path: '/monitoring',
       element: ControlCenter,
       permissions: [{ action: 'read', subject: 'Agent' }],
     },

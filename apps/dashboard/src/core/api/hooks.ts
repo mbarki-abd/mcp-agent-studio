@@ -55,9 +55,20 @@ export function useCurrentUser(options?: Omit<UseQueryOptions<User, ApiError>, '
 export function useServers(params?: { page?: number; pageSize?: number }) {
   return useQuery({
     queryKey: queryKeys.servers.list(params),
-    queryFn: () => {
+    queryFn: async () => {
       const query = params ? `?page=${params.page || 1}&pageSize=${params.pageSize || 10}` : '';
-      return apiClient.get<PaginatedResponse<ServerConfiguration>>(`/servers${query}`);
+      const response = await apiClient.get<{ servers: ServerConfiguration[] } | PaginatedResponse<ServerConfiguration>>(`/servers${query}`);
+      // Transform API response to standard format
+      if ('servers' in response) {
+        return {
+          items: response.servers,
+          total: response.servers.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+          totalPages: 1,
+        } as PaginatedResponse<ServerConfiguration>;
+      }
+      return response;
     },
   });
 }
@@ -106,7 +117,7 @@ export function useDeleteServer() {
 
 export function useTestServerConnection() {
   return useMutation({
-    mutationFn: (id: string) => apiClient.post<{ success: boolean; latency?: number }>(`/servers/${id}/test`),
+    mutationFn: (id: string) => apiClient.post<{ success: boolean; latency?: number }>(`/servers/${id}/test`, {}),
   });
 }
 
@@ -114,14 +125,25 @@ export function useTestServerConnection() {
 export function useAgents(params?: { serverId?: string; status?: string; page?: number; pageSize?: number }) {
   return useQuery({
     queryKey: queryKeys.agents.list(params),
-    queryFn: () => {
+    queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params?.serverId) searchParams.set('serverId', params.serverId);
       if (params?.status) searchParams.set('status', params.status);
       if (params?.page) searchParams.set('page', String(params.page));
       if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
       const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
-      return apiClient.get<PaginatedResponse<Agent>>(`/agents${query}`);
+      const response = await apiClient.get<{ agents: Agent[] } | PaginatedResponse<Agent>>(`/agents${query}`);
+      // Transform API response to standard format
+      if ('agents' in response) {
+        return {
+          items: response.agents,
+          total: response.agents.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+          totalPages: 1,
+        } as PaginatedResponse<Agent>;
+      }
+      return response;
     },
   });
 }
@@ -170,7 +192,7 @@ export function useDeleteAgent() {
 export function useValidateAgent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.post<Agent>(`/agents/${id}/validate`),
+    mutationFn: (id: string) => apiClient.post<Agent>(`/agents/${id}/validate`, {}),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.agents.all });
@@ -182,14 +204,25 @@ export function useValidateAgent() {
 export function useTasks(params?: { status?: string; agentId?: string; page?: number; pageSize?: number }) {
   return useQuery({
     queryKey: queryKeys.tasks.list(params),
-    queryFn: () => {
+    queryFn: async () => {
       const searchParams = new URLSearchParams();
       if (params?.status) searchParams.set('status', params.status);
       if (params?.agentId) searchParams.set('agentId', params.agentId);
       if (params?.page) searchParams.set('page', String(params.page));
       if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
       const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
-      return apiClient.get<PaginatedResponse<Task>>(`/tasks${query}`);
+      const response = await apiClient.get<{ tasks: Task[] } | PaginatedResponse<Task>>(`/tasks${query}`);
+      // Transform API response to standard format
+      if ('tasks' in response) {
+        return {
+          items: response.tasks,
+          total: response.tasks.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+          totalPages: 1,
+        } as PaginatedResponse<Task>;
+      }
+      return response;
     },
   });
 }
@@ -246,7 +279,7 @@ export function useDeleteTask() {
 export function useRunTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.post<TaskExecution>(`/tasks/${id}/run`),
+    mutationFn: (id: string) => apiClient.post<TaskExecution>(`/tasks/${id}/execute`, {}),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.executions(id) });
@@ -257,7 +290,7 @@ export function useRunTask() {
 export function useCancelTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiClient.post(`/tasks/${id}/cancel`),
+    mutationFn: (id: string) => apiClient.post(`/tasks/${id}/cancel`, {}),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.executions(id) });
@@ -269,7 +302,10 @@ export function useCancelTask() {
 export function useToolsCatalog() {
   return useQuery({
     queryKey: queryKeys.tools.catalog,
-    queryFn: () => apiClient.get<ToolDefinition[]>('/tools'),
+    queryFn: async () => {
+      const response = await apiClient.get<{ tools: ToolDefinition[] }>('/tools/definitions');
+      return response.tools;
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes - catalog doesn't change often
   });
 }
@@ -277,7 +313,10 @@ export function useToolsCatalog() {
 export function useServerTools(serverId: string) {
   return useQuery({
     queryKey: queryKeys.tools.server(serverId),
-    queryFn: () => apiClient.get<ServerTool[]>(`/tools/server/${serverId}`),
+    queryFn: async () => {
+      const response = await apiClient.get<{ tools: ServerTool[] }>(`/tools/servers/${serverId}`);
+      return response.tools;
+    },
     enabled: !!serverId,
   });
 }
@@ -286,7 +325,7 @@ export function useInstallTool() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ serverId, toolId }: { serverId: string; toolId: string }) =>
-      apiClient.post<ServerTool>(`/tools/server/${serverId}/install`, { toolId }),
+      apiClient.post<ServerTool>(`/tools/servers/${serverId}/install`, { toolId }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tools.server(variables.serverId) });
     },
@@ -296,7 +335,10 @@ export function useInstallTool() {
 export function useAgentToolPermissions(agentId: string) {
   return useQuery({
     queryKey: queryKeys.tools.agentPermissions(agentId),
-    queryFn: () => apiClient.get<AgentToolPermission[]>(`/tools/agent/${agentId}/permissions`),
+    queryFn: async () => {
+      const response = await apiClient.get<{ permissions: AgentToolPermission[] }>(`/tools/agents/${agentId}/permissions`);
+      return response.permissions;
+    },
     enabled: !!agentId,
   });
 }
@@ -305,7 +347,7 @@ export function useUpdateAgentToolPermissions() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, permissions }: { agentId: string; permissions: Partial<AgentToolPermission>[] }) =>
-      apiClient.put(`/tools/agent/${agentId}/permissions`, { permissions }),
+      apiClient.put(`/tools/agents/${agentId}/permissions`, { permissions }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tools.agentPermissions(variables.agentId) });
     },

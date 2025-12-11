@@ -16,22 +16,22 @@ export const tasksModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'tasks',
+      path: '/tasks',
       element: TasksList,
       permissions: [{ action: 'read', subject: 'Task' }],
     },
     {
-      path: 'tasks/new',
+      path: '/tasks/new',
       element: CreateTask,
       permissions: [{ action: 'create', subject: 'Task' }],
     },
     {
-      path: 'tasks/:id',
+      path: '/tasks/:id',
       element: TaskDetail,
       permissions: [{ action: 'read', subject: 'Task' }],
     },
     {
-      path: 'tasks/:id/edit',
+      path: '/tasks/:id/edit',
       element: CreateTask,
       permissions: [{ action: 'update', subject: 'Task' }],
     },

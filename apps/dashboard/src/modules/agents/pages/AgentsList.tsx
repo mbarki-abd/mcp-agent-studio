@@ -12,7 +12,7 @@ import {
 import { AgentCard } from '../components/AgentCard';
 import { useAgents, useDeleteAgent, useValidateAgent } from '../../../core/api';
 import { useAgentsStore } from '../stores/agents.store';
-import { useAgentStatus, useAgentSubscription } from '../../../core/websocket';
+import { useAgentStatus, useAgentsSubscription } from '../../../core/websocket';
 import { Can } from '../../../core/auth';
 import type { AgentStatus, AgentStatusEvent } from '@mcp/types';
 
@@ -42,10 +42,7 @@ export default function AgentsList() {
 
   // Subscribe to status updates for all agents
   const agentIds = agents.map((a) => a.id);
-  agentIds.forEach((id) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useAgentSubscription(id);
-  });
+  useAgentsSubscription(agentIds);
 
   // Handle real-time status updates
   const handleStatusUpdate = useCallback(

@@ -113,11 +113,12 @@ export function ModuleLoader({ children }: ModuleLoaderProps) {
 
   // Get routes from all enabled modules
   const routes = useMemo(() => {
-    if (!initialized) return [];
+    // Always return routes, even before initialization
+    // This prevents the fallback redirect from happening too early
     return moduleRegistry.getRoutes();
-  }, [initialized]);
+  }, [initialized]); // Still depend on initialized to trigger re-render
 
-  if (authLoading) {
+  if (authLoading || !initialized) {
     return <LoadingFallback />;
   }
 

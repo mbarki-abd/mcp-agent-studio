@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { AgentStatusEvent, TodoProgressEvent, ExecutionStreamEvent } from '@mcp/types';
+import { apiClient } from '../api';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
 
@@ -35,7 +36,8 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
   // Initialize socket connection
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    // Use apiClient token which is validated, not raw localStorage
+    const token = apiClient.getToken();
     if (!token) return;
 
     const socket = io(WS_URL, {
@@ -152,6 +154,23 @@ export function useAgentSubscription(agentId: string | undefined) {
     subscribe('agent', agentId);
     return () => unsubscribe('agent', agentId);
   }, [agentId, subscribe, unsubscribe]);
+}
+
+// Hook to subscribe to multiple agents at once (avoids hooks-in-loop)
+export function useAgentsSubscription(agentIds: string[]) {
+  const { subscribe, unsubscribe } = useWebSocket();
+
+  useEffect(() => {
+    if (!agentIds || agentIds.length === 0) return;
+
+    // Subscribe to all agents
+    agentIds.forEach(id => subscribe('agent', id));
+
+    // Cleanup: unsubscribe from all
+    return () => {
+      agentIds.forEach(id => unsubscribe('agent', id));
+    };
+  }, [agentIds.join(','), subscribe, unsubscribe]); // Use join for stable dependency
 }
 
 // Hook to listen for agent status changes

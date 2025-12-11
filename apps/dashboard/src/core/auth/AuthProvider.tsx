@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { createContextualCan } from '@casl/react';
 import { apiClient, queryKeys } from '../api';
 import { defineAbilitiesFor, createDefaultAbility, type AppAbility } from './ability';
 import type { User, Role } from '@mcp/types';
@@ -20,9 +19,6 @@ interface AuthContextValue extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-// CASL Can component
-export const Can = createContextualCan<AppAbility>(AuthContext as never);
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -187,4 +183,27 @@ export function useAuth() {
 export function useAbility() {
   const { ability } = useAuth();
   return ability;
+}
+
+// Custom Can component props
+interface CanProps {
+  I: string;
+  a: string;
+  children: ReactNode;
+  passThrough?: boolean;
+  not?: boolean;
+}
+
+// Custom Can component that uses useAbility hook
+// This avoids the React 18 warning about rendering Context directly
+export function Can({ I: action, a: subject, children, passThrough = false, not = false }: CanProps) {
+  const ability = useAbility();
+  const can = ability.can(action as never, subject as never);
+  const allowed = not ? !can : can;
+
+  if (allowed || passThrough) {
+    return <>{children}</>;
+  }
+
+  return null;
 }

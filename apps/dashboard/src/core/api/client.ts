@@ -46,6 +46,10 @@ class ApiClient {
 
     // Handle 401 - Unauthorized
     if (response.status === 401) {
+      // Don't try to refresh for auth endpoints (prevents cascade of 401s)
+      if (endpoint === '/auth/me' || endpoint === '/auth/refresh') {
+        throw new AuthError('Not authenticated');
+      }
       // Try to refresh token
       const refreshed = await this.refreshToken();
       if (refreshed) {

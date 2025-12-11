@@ -363,7 +363,6 @@ export default function CreateAgent() {
                   <select
                     {...field}
                     className="w-full px-3 py-2 rounded-md border bg-background"
-                    disabled={isEditing}
                   >
                     <option value="">Select a server</option>
                     {servers.map((server) => (

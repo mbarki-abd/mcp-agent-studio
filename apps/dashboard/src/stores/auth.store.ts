@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User } from '@mcp/types';
+import { apiClient } from '../core/api/client';
 
 interface AuthState {
   user: User | null;
@@ -43,6 +44,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const data = await response.json();
+
+          // Sync token with apiClient and localStorage (for AuthProvider)
+          apiClient.setToken(data.token);
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('refreshToken', data.refreshToken);
+
           set({
             user: data.user,
             token: data.token,
@@ -71,6 +78,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const data = await response.json();
+
+          // Sync token with apiClient and localStorage (for AuthProvider)
+          apiClient.setToken(data.token);
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('refreshToken', data.refreshToken);
+
           set({
             user: data.user,
             token: data.token,
@@ -95,6 +108,11 @@ export const useAuthStore = create<AuthState>()(
             },
           }).catch(() => {});
         }
+        // Clear token from apiClient and localStorage
+        apiClient.setToken(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+
         set({
           user: null,
           token: null,
@@ -106,6 +124,9 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: () => {
         const { token, user } = get();
         if (token && user) {
+          // Sync token with apiClient and localStorage on app init
+          apiClient.setToken(token);
+          localStorage.setItem('token', token);
           set({ isAuthenticated: true });
         }
       },

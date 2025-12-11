@@ -14,7 +14,7 @@ export const chatModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'chat/:agentId',
+      path: '/chat/:agentId',
       element: AgentChat,
       permissions: [{ action: 'execute', subject: 'Agent' }],
     },

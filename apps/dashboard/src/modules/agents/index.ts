@@ -16,22 +16,22 @@ export const agentsModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'agents',
+      path: '/agents',
       element: AgentsList,
       permissions: [{ action: 'read', subject: 'Agent' }],
     },
     {
-      path: 'agents/new',
+      path: '/agents/new',
       element: CreateAgent,
       permissions: [{ action: 'create', subject: 'Agent' }],
     },
     {
-      path: 'agents/:id',
+      path: '/agents/:id',
       element: AgentDetail,
       permissions: [{ action: 'read', subject: 'Agent' }],
     },
     {
-      path: 'agents/:id/edit',
+      path: '/agents/:id/edit',
       element: CreateAgent,
       permissions: [{ action: 'update', subject: 'Agent' }],
     },

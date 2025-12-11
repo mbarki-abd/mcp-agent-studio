@@ -16,17 +16,17 @@ export const toolsModule: ModuleDefinition = {
 
   routes: [
     {
-      path: 'tools',
+      path: '/tools',
       element: ToolsCatalog,
       permissions: [{ action: 'read', subject: 'ToolDefinition' }],
     },
     {
-      path: 'tools/server/:serverId',
+      path: '/tools/server/:serverId',
       element: ServerTools,
       permissions: [{ action: 'read', subject: 'ServerTool' }],
     },
     {
-      path: 'tools/agent/:agentId/permissions',
+      path: '/tools/agent/:agentId/permissions',
       element: AgentPermissions,
       permissions: [{ action: 'read', subject: 'AgentToolPermission' }],
     },
