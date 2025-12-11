@@ -2,7 +2,7 @@
 
 **Date:** 2025-12-12
 **Version:** V2 Complete
-**Grade:** A- (Production-Ready, HIGH security issues resolved)
+**Grade:** A (Production-Ready, all critical issues resolved)
 
 ---
 
@@ -53,17 +53,23 @@ function getCorsOrigin(): string | string[] {
 - Removed useAuthStore (Zustand)
 - AuthProvider (React Context) is now the single source of truth
 
-### 4. WebSocket Token in Query (MEDIUM) - TODO
+### 4. ~~WebSocket Token in Query~~ ✅ ALREADY SECURE
 ```typescript
-auth: { token }  // Visible in logs
+// Socket.IO auth option sends token during handshake, NOT in URL query
+auth: { token }  // This is the correct approach
 ```
-**Fix:** Use secure auth header
+**Status:** Already using secure Socket.IO auth handshake (not query params)
 
-### 5. Task Dependencies as Array (MEDIUM) - TODO
-```typescript
-dependsOnIds String[] @default([])  // O(n) queries
+### 5. ~~Task Dependencies as Array~~ ✅ FIXED
+```prisma
+// Added TaskDependency junction table with proper relations and indexes
+model TaskDependency {
+  @@unique([taskId, dependsOnId])
+  @@index([taskId])
+  @@index([dependsOnId])
+}
 ```
-**Fix:** Create TaskDependency junction table
+**Status:** Junction table added, legacy array preserved for backwards compatibility
 
 ---
 

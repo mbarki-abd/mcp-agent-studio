@@ -229,7 +229,11 @@ model Task {
   nextRunAt            DateTime?
   runCount             Int            @default(0)
 
-  // Dependencies (stored as array of task IDs, queried manually)
+  // Dependencies - junction table for proper relations and indexes
+  dependencies         TaskDependency[] @relation("DependentTask")
+  dependents           TaskDependency[] @relation("DependencyOf")
+
+  // Legacy field (deprecated, use dependencies relation instead)
   dependsOnIds         String[]       @default([])
 
   // Relations
@@ -281,6 +285,23 @@ enum RecurrenceFreq {
   WEEKLY
   MONTHLY
   CUSTOM
+}
+
+// ==================== TASK DEPENDENCIES ====================
+
+model TaskDependency {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOnId String
+  dependsOn   Task     @relation("DependencyOf", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([taskId, dependsOnId])
+  @@index([taskId])
+  @@index([dependsOnId])
+  @@map("task_dependencies")
 }
 
 // ==================== TASK EXECUTION ====================
