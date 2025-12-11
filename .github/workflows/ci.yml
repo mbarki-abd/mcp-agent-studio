@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [master, main, develop]
   push:
-    branches: [main, develop]
+    branches: [master, main, develop]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -99,3 +99,26 @@ jobs:
           tags: mcp-${{ matrix.image }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  test-mcp:
+    name: MCP Protocol Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install MCP server dependencies
+        run: cd tools/sample-mcp-server && npm install
+
+      - name: Start MCP server and run tests
+        run: |
+          cd tools/sample-mcp-server
+          npm start &
+          sleep 3
+          node test-client.js
