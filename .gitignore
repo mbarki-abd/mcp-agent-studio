@@ -38,6 +38,9 @@ pnpm-debug.log*
 # Test
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
+e2e/screenshots/
 
 # Prisma
 prisma/migrations/*.sql.bak
@@ -53,3 +56,4 @@ deploy/traefik/acme.json
 # Secrets
 *.pem
 *.key
+*.heapsnapshot
