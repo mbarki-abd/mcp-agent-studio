@@ -14,6 +14,8 @@ import rbacPlugin from './middleware/rbac.middleware.js';
 import errorHandlerPlugin from './middleware/error.middleware.js';
 import loggingPlugin from './middleware/logging.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
+import { metrics } from './utils/metrics.js';
+import { circuitBreakers } from './utils/circuit-breaker.js';
 
 // Environment configuration with validation
 const isProduction = process.env.NODE_ENV === 'production';
@@ -182,6 +184,21 @@ fastify.get('/api', async () => {
     version: '0.1.0',
     documentation: '/docs',
   };
+});
+
+// Prometheus metrics endpoint
+fastify.get('/metrics', async (request, reply) => {
+  reply.header('Content-Type', 'text/plain; version=0.0.4');
+  return metrics.export();
+});
+
+// Circuit breaker status endpoint
+fastify.get('/api/circuit-breakers', async () => {
+  const circuits: Record<string, unknown> = {};
+  for (const [name, breaker] of circuitBreakers.getAll()) {
+    circuits[name] = breaker.getStats();
+  }
+  return { circuits };
 });
 
 // Import and register routes

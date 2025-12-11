@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import { timeRequest } from '../utils/metrics.js';
 
 interface RequestLog {
   requestId: string;
@@ -15,8 +16,8 @@ interface RequestLog {
 }
 
 async function loggingPlugin(fastify: ReturnType<typeof import('fastify').default>) {
-  // Skip logging for health checks and static assets
-  const skipPaths = ['/health', '/favicon.ico', '/docs'];
+  // Skip logging for health checks, metrics, and static assets
+  const skipPaths = ['/health', '/ready', '/metrics', '/favicon.ico', '/docs'];
 
   fastify.addHook('onRequest', async (request: FastifyRequest) => {
     // Store start time for duration calculation
@@ -56,6 +57,13 @@ async function loggingPlugin(fastify: ReturnType<typeof import('fastify').defaul
     } else {
       request.log.info({ req: log }, 'Request completed');
     }
+
+    // Record metrics
+    timeRequest(duration, {
+      method: request.method,
+      status: String(reply.statusCode),
+      route: request.routeOptions?.url || request.url,
+    });
   });
 
   // Log unhandled errors
