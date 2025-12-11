@@ -14,6 +14,34 @@ import rbacPlugin from './middleware/rbac.middleware.js';
 import errorHandlerPlugin from './middleware/error.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
 
+// Environment configuration with validation
+const isProduction = process.env.NODE_ENV === 'production';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && isProduction) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  if (!secret) {
+    console.warn('⚠️  WARNING: Using default JWT secret. Set JWT_SECRET in production!');
+    return 'dev-secret-change-in-production';
+  }
+  return secret;
+}
+
+function getCorsOrigin(): string | string[] {
+  const origin = process.env.CORS_ORIGIN;
+  if (!origin && isProduction) {
+    throw new Error('CORS_ORIGIN environment variable is required in production');
+  }
+  if (!origin) {
+    // Development: allow localhost origins
+    return ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
+  }
+  // Support comma-separated origins
+  return origin.includes(',') ? origin.split(',').map(o => o.trim()) : origin;
+}
+
 // Initialize Prisma
 export const prisma = new PrismaClient();
 
@@ -37,7 +65,7 @@ async function registerPlugins() {
 
   // CORS
   await fastify.register(cors, {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: getCorsOrigin(),
     credentials: true,
   });
 
@@ -48,7 +76,7 @@ async function registerPlugins() {
 
   // JWT
   await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production',
+    secret: getJwtSecret(),
   });
 
   // Rate limiting
@@ -66,7 +94,7 @@ async function registerPlugins() {
   // Socket.IO
   await fastify.register(fastifySocketIO, {
     cors: {
-      origin: process.env.CORS_ORIGIN || '*',
+      origin: getCorsOrigin(),
       credentials: true,
     },
   });

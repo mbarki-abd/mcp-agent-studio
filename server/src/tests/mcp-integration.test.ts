@@ -5,7 +5,8 @@
  * Run the sample server first: cd tools/sample-mcp-server && npm start
  */
 
-import { MCPClient, getMCPClient, removeMCPClient, clearMCPClients } from '../services/mcp-client';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { MCPClient, getMCPClient, removeMCPClient, clearMCPClients } from '../services/mcp-client.js';
 
 const TEST_SERVER_URL = process.env.MCP_TEST_SERVER || 'http://localhost:3001';
 const TEST_TOKEN = process.env.MCP_TEST_TOKEN || 'sample-token-12345';
