@@ -12,6 +12,7 @@ import 'dotenv/config';
 import authPlugin from './middleware/auth.middleware.js';
 import rbacPlugin from './middleware/rbac.middleware.js';
 import errorHandlerPlugin from './middleware/error.middleware.js';
+import loggingPlugin from './middleware/logging.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
 
 // Environment configuration with validation
@@ -62,6 +63,9 @@ const fastify = Fastify({
 async function registerPlugins() {
   // Error handler (register early)
   await fastify.register(errorHandlerPlugin);
+
+  // Request logging (register early for full coverage)
+  await fastify.register(loggingPlugin);
 
   // CORS
   await fastify.register(cors, {
@@ -140,13 +144,35 @@ async function registerPlugins() {
   });
 }
 
-// Health check route
+// Health check route with detailed status
 fastify.get('/health', async () => {
+  const dbHealthy = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
+
   return {
-    status: 'ok',
+    status: dbHealthy ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
     version: '0.1.0',
+    uptime: process.uptime(),
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      unit: 'MB',
+    },
+    checks: {
+      database: dbHealthy ? 'up' : 'down',
+    },
   };
+});
+
+// Readiness probe (for Kubernetes)
+fastify.get('/ready', async () => {
+  const dbReady = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
+
+  if (!dbReady) {
+    throw { statusCode: 503, message: 'Database not ready' };
+  }
+
+  return { status: 'ready' };
 });
 
 // API info route
