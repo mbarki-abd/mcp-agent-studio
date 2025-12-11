@@ -1,0 +1,130 @@
+%% MCP Agent Studio - MCP Client Communication Flow
+%% Generated: 2025-12-11
+
+sequenceDiagram
+    participant U as User
+    participant D as Dashboard
+    participant S as Server
+    participant MAS as MasterAgentService
+    participant MCP as MCPClient
+    participant WS as WebSocket
+    participant HTTP as HTTP Client
+    participant EXT as MCP Server
+
+    Note over U,EXT: === Execute Task via MCP ===
+
+    U->>D: Create Task (prompt, agentId)
+    D->>S: POST /api/tasks/execute
+    S->>MAS: executePrompt(prompt, agentId, callbacks)
+
+    MAS->>MAS: Initialize MCPClient if needed
+    MAS->>MCP: Check connection state
+
+    alt WebSocket Connected
+        MCP->>WS: connectionState === 'connected'
+        MAS->>MCP: execute(request, callbacks)
+
+        Note over MCP,EXT: JSON-RPC 2.0 over WebSocket
+
+        MCP->>WS: send({ jsonrpc: "2.0", method: "execute", params: {...} })
+        WS->>EXT: WebSocket message
+
+        loop Streaming Response
+            EXT-->>WS: { type: "output", chunk: "..." }
+            WS-->>MCP: onMessage
+            MCP-->>MAS: callbacks.onOutput(chunk)
+            MAS-->>S: MonitoringService.broadcastExecution()
+            S-->>D: Socket.IO event
+            D-->>U: Update UI (streaming output)
+        end
+
+        EXT-->>WS: { type: "tool_call", name: "Read", args: {...} }
+        WS-->>MCP: onMessage
+        MCP-->>MAS: callbacks.onToolCall(name, args)
+
+        EXT-->>WS: { type: "complete", result: {...} }
+        WS-->>MCP: onMessage
+        MCP-->>MAS: Return { output, tokensUsed }
+
+    else WebSocket Disconnected - HTTP Fallback
+        MCP->>MCP: connectionState !== 'connected'
+        MAS->>MCP: executeHttp(request, callbacks)
+
+        Note over MCP,EXT: HTTP Streaming (ReadableStream)
+
+        MCP->>HTTP: POST /execute { prompt, agentId }
+        HTTP->>EXT: HTTP Request
+
+        loop Streaming Response
+            EXT-->>HTTP: Stream chunk
+            HTTP-->>MCP: onChunk(data)
+            MCP-->>MAS: callbacks.onOutput(chunk)
+            MAS-->>S: broadcastExecution()
+            S-->>D: Socket.IO
+            D-->>U: Update UI
+        end
+
+        HTTP-->>MCP: Stream complete
+        MCP-->>MAS: Return { output, tokensUsed }
+
+    else No MCP Server - Simulation Mode
+        MAS->>MAS: simulateExecution()
+
+        loop Simulated Chunks
+            MAS->>MAS: await delay(500ms)
+            MAS-->>MAS: callbacks.onOutput(simulatedChunk)
+            MAS-->>S: broadcastExecution()
+            S-->>D: Socket.IO
+            D-->>U: Update UI
+        end
+
+        MAS-->>MAS: Return simulated result
+    end
+
+    MAS-->>S: ExecutionResult { success, output, tokensUsed, durationMs }
+    S->>S: Save TaskExecution to DB
+    S-->>D: { success: true, execution: {...} }
+    D-->>U: Show completion
+
+    Note over U,EXT: === WebSocket Reconnection ===
+
+    MCP->>WS: Connection lost
+    WS-->>MCP: onClose event
+    MCP->>MCP: Set state = 'disconnected'
+    MCP->>MCP: Start reconnection (exponential backoff)
+
+    loop Until Connected
+        MCP->>MCP: Wait (1s, 2s, 4s, 8s... max 30s)
+        MCP->>EXT: Attempt connection
+        alt Success
+            EXT-->>MCP: Connected
+            MCP->>MCP: Set state = 'connected'
+            MCP->>MCP: emit('connected')
+        else Failure
+            MCP->>MCP: Increment retry counter
+        end
+    end
+
+    Note over U,EXT: === Agent Provisioning via MCP ===
+
+    U->>D: Create new Agent
+    D->>S: POST /api/agents
+    S->>MAS: createSubAgent(params, userId)
+    MAS->>S: prisma.agent.create()
+    S-->>MAS: Agent created (DB)
+
+    alt MCP Connected
+        MAS->>MCP: callTool('provision_agent', agentParams)
+        MCP->>WS: JSON-RPC call
+        WS->>EXT: Provision request
+        EXT-->>WS: { success: true }
+        WS-->>MCP: Response
+        MCP-->>MAS: Agent provisioned on MCP
+    else MCP Not Connected
+        MAS->>MAS: Log warning
+        Note over MAS: Agent created in DB only<br/>Will be provisioned during validation
+    end
+
+    MAS-->>S: Return Agent
+    S-->>D: { agent: {...} }
+    D-->>U: Show new agent

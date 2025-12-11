@@ -1,0 +1,79 @@
+%% MCP Agent Studio - Service Layer Architecture
+%% Generated: 2025-12-11
+
+flowchart TB
+    subgraph Routes["API Routes Layer"]
+        direction LR
+        AuthR["/auth"]
+        ServersR["/servers"]
+        AgentsR["/agents"]
+        TasksR["/tasks"]
+        ToolsR["/tools"]
+        MonitorR["/monitoring"]
+    end
+
+    subgraph Services["Service Layer"]
+        direction TB
+
+        subgraph Core["Core Services"]
+            AuthS["AuthService"]
+            MonitorS["MonitoringService"]
+        end
+
+        subgraph Domain["Domain Services"]
+            ServerConfigS["ServerConfigService"]
+            AgentS["AgentService"]
+            TaskS["TaskService"]
+            ToolsS["ToolsService"]
+        end
+
+        subgraph Orchestration["Orchestration Services"]
+            MasterAgentS["MasterAgentService"]
+            SchedulerS["SchedulerService"]
+        end
+    end
+
+    subgraph DataAccess["Data Access Layer"]
+        Prisma["Prisma ORM"]
+        MCPClient["MCPClient"]
+        BullMQ["BullMQ Queue"]
+    end
+
+    subgraph External["External Dependencies"]
+        PostgreSQL[("PostgreSQL")]
+        Redis[("Redis")]
+        MCPServer["MCP Server"]
+    end
+
+    %% Routes to Services
+    AuthR --> AuthS
+    ServersR --> ServerConfigS
+    AgentsR --> AgentS
+    AgentsR --> MasterAgentS
+    TasksR --> TaskS
+    TasksR --> SchedulerS
+    ToolsR --> ToolsS
+    MonitorR --> MonitorS
+
+    %% Service Dependencies
+    ServerConfigS --> Prisma
+    AgentS --> Prisma
+    AgentS --> MasterAgentS
+    TaskS --> Prisma
+    TaskS --> SchedulerS
+    ToolsS --> Prisma
+    AuthS --> Prisma
+
+    MasterAgentS --> MCPClient
+    MasterAgentS --> Prisma
+    MasterAgentS --> MonitorS
+
+    SchedulerS --> BullMQ
+    SchedulerS --> MasterAgentS
+
+    MonitorS -.-> WebSocket["Socket.IO"]
+
+    %% Data Access to External
+    Prisma --> PostgreSQL
+    BullMQ --> Redis
+    MCPClient --> MCPServer

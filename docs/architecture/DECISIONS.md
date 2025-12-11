@@ -6,6 +6,7 @@
 |----|-------|--------|------|
 | [ADR-001](./adr/001-tech-stack.md) | Technology Stack | Accepted | 2025-12-10 |
 | [ADR-002](./adr/002-module-architecture.md) | Module Architecture | Accepted | 2025-12-10 |
+| [ADR-003](./adr/003-mcp-client.md) | MCP Client Implementation | Accepted | 2025-12-11 |
 
 ---
 

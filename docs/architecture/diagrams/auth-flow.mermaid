@@ -1,0 +1,85 @@
+%% MCP Agent Studio - Authentication & Authorization Flow
+%% Generated: 2025-12-11
+
+sequenceDiagram
+    participant C as Client
+    participant D as Dashboard
+    participant S as Server
+    participant M as Middleware
+    participant DB as PostgreSQL
+
+    Note over C,DB: === Registration Flow ===
+
+    C->>D: POST /register (email, password)
+    D->>S: POST /api/auth/register
+    S->>S: Hash password (bcrypt)
+    S->>DB: Create User
+    DB-->>S: User created
+    S->>DB: Create Session
+    DB-->>S: Session created
+    S->>S: Generate JWT (accessToken)
+    S->>S: Generate refreshToken
+    S-->>D: { accessToken, refreshToken, user }
+    D->>D: Store tokens (Zustand + localStorage)
+    D-->>C: Redirect to Dashboard
+
+    Note over C,DB: === Login Flow ===
+
+    C->>D: POST /login (email, password)
+    D->>S: POST /api/auth/login
+    S->>DB: Find User by email
+    DB-->>S: User data
+    S->>S: Verify password (bcrypt)
+    S->>DB: Create Session
+    S->>S: Generate JWT
+    S-->>D: { accessToken, refreshToken, user }
+    D->>D: Store tokens
+    D->>D: Initialize CASL abilities
+    D-->>C: Redirect to Dashboard
+
+    Note over C,DB: === Authenticated Request Flow ===
+
+    C->>D: Access /agents
+    D->>D: Get accessToken from store
+    D->>S: GET /api/agents (Authorization: Bearer token)
+    S->>M: Auth Middleware
+    M->>M: Verify JWT signature
+    M->>DB: Validate session exists
+    DB-->>M: Session valid
+    M->>M: Check token expiry
+    M->>DB: Get user role
+    DB-->>M: User { role: ADMIN }
+    M->>M: RBAC check (can read Agent)
+    M-->>S: User authenticated & authorized
+    S->>DB: Query Agents
+    DB-->>S: Agents list
+    S-->>D: { data: [...agents] }
+    D-->>C: Render agents list
+
+    Note over C,DB: === Token Refresh Flow ===
+
+    C->>D: Access protected resource
+    D->>S: GET /api/resource (expired token)
+    S->>M: Auth Middleware
+    M->>M: JWT expired
+    M-->>D: 401 Unauthorized
+    D->>D: Detect 401, get refreshToken
+    D->>S: POST /api/auth/refresh { refreshToken }
+    S->>DB: Validate refresh token
+    DB-->>S: Token valid
+    S->>S: Generate new accessToken
+    S-->>D: { accessToken }
+    D->>D: Update stored token
+    D->>S: Retry original request
+    S-->>D: { data: resource }
+    D-->>C: Render resource
+
+    Note over C,DB: === Logout Flow ===
+
+    C->>D: Click Logout
+    D->>S: POST /api/auth/logout
+    S->>DB: Delete session
+    DB-->>S: Session deleted
+    S-->>D: { success: true }
+    D->>D: Clear tokens from store
+    D-->>C: Redirect to Login
