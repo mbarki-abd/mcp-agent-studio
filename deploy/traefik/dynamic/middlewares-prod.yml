@@ -1,0 +1,53 @@
+# Traefik Dynamic Configuration - Middlewares
+http:
+  middlewares:
+    # API Rate Limiting
+    api-ratelimit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1m
+
+    # Security Headers for API
+    api-headers:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowOriginList:
+          - "https://mcp.ilinqsoft.com"
+        accessControlAllowHeaders:
+          - "Authorization"
+          - "Content-Type"
+        accessControlMaxAge: 86400
+        addVaryHeader: true
+        customResponseHeaders:
+          X-Robots-Tag: "noindex, nofollow"
+
+    # Security Headers for Dashboard
+    dashboard-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+        customFrameOptionsValue: "SAMEORIGIN"
+
+    # Compression
+    compress:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+
+    # Retry on failure
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms

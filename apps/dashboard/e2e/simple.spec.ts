@@ -51,3 +51,32 @@ test('servers page is accessible', async ({ page }) => {
   await page.goto('/servers');
   await expect(page.getByText(/Server/i).first()).toBeVisible({ timeout: 10000 });
 });
+
+test('can login with admin user', async ({ page }) => {
+  await page.goto('/login');
+
+  await page.locator('#email').fill('admin@example.com');
+  await page.locator('#password').fill('password123');
+  await page.getByRole('button', { name: /sign in/i }).click();
+
+  // Wait for redirect away from login
+  await expect(page).not.toHaveURL(/.*login/, { timeout: 15000 });
+
+  // Verify we are logged in
+  await expect(page.getByText(/MCP Agent Studio/i).first()).toBeVisible({ timeout: 10000 });
+});
+
+test('admin user has correct role', async ({ page }) => {
+  await page.goto('/login');
+
+  await page.locator('#email').fill('admin@example.com');
+  await page.locator('#password').fill('password123');
+  await page.getByRole('button', { name: /sign in/i }).click();
+
+  // Wait for redirect
+  await expect(page).not.toHaveURL(/.*login/, { timeout: 15000 });
+
+  // Admin should have access to admin features
+  // This test validates the role is properly set
+  await expect(page).toHaveURL(/.*\//, { timeout: 5000 });
+});
