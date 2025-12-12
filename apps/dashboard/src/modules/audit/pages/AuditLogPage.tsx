@@ -22,8 +22,13 @@ import {
 import { AuditStatsCard } from '../components/AuditStatsCard';
 import { AuditLogTable } from '../components/AuditLogTable';
 
-const ACTIONS: AuditAction[] = ['LOGIN', 'LOGOUT', 'CREATE', 'READ', 'UPDATE', 'DELETE', 'EXECUTE', 'SYSTEM'];
-const STATUSES: AuditStatus[] = ['SUCCESS', 'FAILURE', 'PENDING'];
+const ACTIONS: AuditAction[] = [
+  'LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'PASSWORD_CHANGE', 'TOKEN_REFRESH',
+  'CREATE', 'READ', 'UPDATE', 'DELETE',
+  'SERVER_CONNECT', 'SERVER_DISCONNECT', 'HEALTH_CHECK',
+  'AGENT_VALIDATE'
+];
+const STATUSES: AuditStatus[] = ['SUCCESS', 'FAILURE', 'PARTIAL'];
 const RESOURCES = ['auth', 'servers', 'agents', 'tasks', 'tools', 'chat', 'audit'];
 
 export default function AuditLogPage() {
@@ -252,7 +257,7 @@ export default function AuditLogPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Timestamp</label>
-                  <p className="text-sm">{new Date(selectedLog.createdAt).toLocaleString()}</p>
+                  <p className="text-sm">{new Date(selectedLog.timestamp).toLocaleString()}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Action</label>
@@ -264,7 +269,7 @@ export default function AuditLogPage() {
                     'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
                     selectedLog.status === 'SUCCESS' && 'bg-green-100 text-green-800',
                     selectedLog.status === 'FAILURE' && 'bg-red-100 text-red-800',
-                    selectedLog.status === 'PENDING' && 'bg-yellow-100 text-yellow-800',
+                    selectedLog.status === 'PARTIAL' && 'bg-yellow-100 text-yellow-800',
                   )}>
                     {selectedLog.status}
                   </span>

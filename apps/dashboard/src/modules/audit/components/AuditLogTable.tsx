@@ -2,14 +2,18 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  Clock,
+  AlertCircle,
   LogIn,
   LogOut,
   Plus,
   Edit,
   Trash,
-  Play,
-  Settings,
+  Key,
+  RefreshCw,
+  Plug,
+  Unplug,
+  HeartPulse,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import type { AuditLogEntry, AuditAction } from '../../../core/api/hooks';
@@ -23,23 +27,33 @@ interface AuditLogTableProps {
 const ACTION_ICONS: Record<AuditAction, typeof LogIn> = {
   LOGIN: LogIn,
   LOGOUT: LogOut,
+  LOGIN_FAILED: LogIn,
+  PASSWORD_CHANGE: Key,
+  TOKEN_REFRESH: RefreshCw,
   CREATE: Plus,
   READ: Eye,
   UPDATE: Edit,
   DELETE: Trash,
-  EXECUTE: Play,
-  SYSTEM: Settings,
+  SERVER_CONNECT: Plug,
+  SERVER_DISCONNECT: Unplug,
+  HEALTH_CHECK: HeartPulse,
+  AGENT_VALIDATE: ShieldCheck,
 };
 
 const ACTION_COLORS: Record<AuditAction, string> = {
   LOGIN: 'text-blue-600 bg-blue-50',
   LOGOUT: 'text-gray-600 bg-gray-50',
+  LOGIN_FAILED: 'text-red-600 bg-red-50',
+  PASSWORD_CHANGE: 'text-amber-600 bg-amber-50',
+  TOKEN_REFRESH: 'text-cyan-600 bg-cyan-50',
   CREATE: 'text-green-600 bg-green-50',
   READ: 'text-indigo-600 bg-indigo-50',
   UPDATE: 'text-amber-600 bg-amber-50',
   DELETE: 'text-red-600 bg-red-50',
-  EXECUTE: 'text-purple-600 bg-purple-50',
-  SYSTEM: 'text-gray-600 bg-gray-50',
+  SERVER_CONNECT: 'text-green-600 bg-green-50',
+  SERVER_DISCONNECT: 'text-orange-600 bg-orange-50',
+  HEALTH_CHECK: 'text-pink-600 bg-pink-50',
+  AGENT_VALIDATE: 'text-purple-600 bg-purple-50',
 };
 
 export function AuditLogTable({ logs, loading, onViewDetails }: AuditLogTableProps) {
@@ -89,13 +103,13 @@ export function AuditLogTable({ logs, loading, onViewDetails }: AuditLogTablePro
       </thead>
       <tbody className="divide-y divide-gray-200">
         {logs.map((log) => {
-          const ActionIcon = ACTION_ICONS[log.action] || Settings;
+          const ActionIcon = ACTION_ICONS[log.action] || Eye;
           const actionColor = ACTION_COLORS[log.action] || 'text-gray-600 bg-gray-50';
 
           return (
             <tr key={log.id} className="hover:bg-gray-50">
               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                {new Date(log.createdAt).toLocaleString()}
+                {new Date(log.timestamp).toLocaleString()}
               </td>
               <td className="px-4 py-3 whitespace-nowrap">
                 <div className="flex items-center gap-2">
@@ -123,11 +137,11 @@ export function AuditLogTable({ logs, loading, onViewDetails }: AuditLogTablePro
                   'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
                   log.status === 'SUCCESS' && 'bg-green-100 text-green-800',
                   log.status === 'FAILURE' && 'bg-red-100 text-red-800',
-                  log.status === 'PENDING' && 'bg-yellow-100 text-yellow-800',
+                  log.status === 'PARTIAL' && 'bg-yellow-100 text-yellow-800',
                 )}>
                   {log.status === 'SUCCESS' && <CheckCircle className="h-3 w-3" />}
                   {log.status === 'FAILURE' && <XCircle className="h-3 w-3" />}
-                  {log.status === 'PENDING' && <Clock className="h-3 w-3" />}
+                  {log.status === 'PARTIAL' && <AlertCircle className="h-3 w-3" />}
                   {log.status}
                 </span>
               </td>

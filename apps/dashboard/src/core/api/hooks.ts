@@ -578,9 +578,13 @@ export function useClearChatSession() {
   });
 }
 
-// Audit types
-export type AuditAction = 'LOGIN' | 'LOGOUT' | 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXECUTE' | 'SYSTEM';
-export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'PENDING';
+// Audit types (match Prisma AuditAction enum)
+export type AuditAction =
+  | 'LOGIN' | 'LOGOUT' | 'LOGIN_FAILED' | 'PASSWORD_CHANGE' | 'TOKEN_REFRESH'
+  | 'CREATE' | 'READ' | 'UPDATE' | 'DELETE'
+  | 'SERVER_CONNECT' | 'SERVER_DISCONNECT' | 'HEALTH_CHECK'
+  | 'AGENT_VALIDATE';
+export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'PARTIAL';
 
 export interface AuditLogEntry {
   id: string;
@@ -597,7 +601,7 @@ export interface AuditLogEntry {
   status: AuditStatus;
   errorMessage?: string;
   duration?: number;
-  createdAt: string;
+  timestamp: string;
 }
 
 export interface AuditLogsResponse {
