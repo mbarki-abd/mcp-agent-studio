@@ -57,3 +57,4 @@ deploy/traefik/acme.json
 *.pem
 *.key
 *.heapsnapshot
+docs/architecture/architecture-report.html
