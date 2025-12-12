@@ -1,6 +1,17 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
+import { getTenantContext, getOrganizationServerIds } from '../utils/tenant.js';
+import {
+  parsePagination,
+  buildPaginatedResponse,
+  calculateSkip,
+  buildOrderBy,
+  validateSortField,
+} from '../utils/pagination.js';
+
+// Allowed sort fields for agents
+const AGENT_SORT_FIELDS = ['createdAt', 'updatedAt', 'name', 'displayName', 'status', 'role'];
 
 const createAgentSchema = z.object({
   serverId: z.string().uuid(),
@@ -25,65 +36,95 @@ const updateAgentSchema = z.object({
 });
 
 export async function agentRoutes(fastify: FastifyInstance) {
-  // List agents
+  // List agents (all org agents)
   fastify.get('/', {
     schema: {
       tags: ['Agents'],
-      description: 'List all agents',
+      description: 'List all agents in the organization',
       security: [{ bearerAuth: [] }],
       querystring: {
         type: 'object',
         properties: {
+          page: { type: 'number', minimum: 1, default: 1 },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
+          sortBy: { type: 'string', enum: AGENT_SORT_FIELDS },
+          sortOrder: { type: 'string', enum: ['asc', 'desc'], default: 'desc' },
           serverId: { type: 'string' },
           status: { type: 'string' },
           role: { type: 'string' },
+          search: { type: 'string' },
         },
       },
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest) => {
-    const { userId } = request.user as { userId: string };
-    const query = request.query as { serverId?: string; status?: string; role?: string };
+    const { organizationId } = getTenantContext(request.user);
+    const query = request.query as {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      serverId?: string;
+      status?: string;
+      role?: string;
+      search?: string;
+    };
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Parse pagination
+    const pagination = parsePagination(query);
+    const validSortBy = validateSortField(pagination.sortBy, AGENT_SORT_FIELDS);
+
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
+
+    // Build where clause
+    const where: any = {
+      serverId: query.serverId || { in: orgServerIds },
+      ...(query.status && { status: query.status as any }),
+      ...(query.role && { role: query.role as any }),
+    };
+
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { displayName: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get total count
+    const total = await prisma.agent.count({ where });
 
     const agents = await prisma.agent.findMany({
-      where: {
-        serverId: query.serverId || { in: serverIds },
-        ...(query.status && { status: query.status as any }),
-        ...(query.role && { role: query.role as any }),
-      },
+      where,
       include: {
         server: { select: { name: true } },
         supervisor: { select: { id: true, name: true, displayName: true } },
         _count: { select: { subordinates: true, tasks: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      skip: calculateSkip(pagination.page, pagination.limit),
+      take: pagination.limit,
+      orderBy: buildOrderBy(validSortBy, pagination.sortOrder),
     });
 
-    return {
-      agents: agents.map((a) => ({
-        id: a.id,
-        serverId: a.serverId,
-        serverName: a.server.name,
-        name: a.name,
-        displayName: a.displayName,
-        description: a.description,
-        role: a.role,
-        status: a.status,
-        capabilities: a.capabilities,
-        supervisor: a.supervisor,
-        subordinateCount: a._count.subordinates,
-        taskCount: a._count.tasks,
-        createdAt: a.createdAt,
-        updatedAt: a.updatedAt,
-      })),
-    };
+    const data = agents.map((a) => ({
+      id: a.id,
+      serverId: a.serverId,
+      serverName: a.server.name,
+      name: a.name,
+      displayName: a.displayName,
+      description: a.description,
+      role: a.role,
+      status: a.status,
+      capabilities: a.capabilities,
+      supervisor: a.supervisor,
+      subordinateCount: a._count.subordinates,
+      taskCount: a._count.tasks,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    }));
+
+    return buildPaginatedResponse(data, total, pagination.page, pagination.limit);
   });
 
   // Create agent
@@ -95,16 +136,14 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId, organizationId } = getTenantContext(request.user);
     const body = createAgentSchema.parse(request.body);
 
-    // Verify server belongs to user
-    const server = await prisma.serverConfiguration.findFirst({
-      where: { id: body.serverId, userId },
-    });
+    // Verify server belongs to organization
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
-    if (!server) {
-      return reply.status(404).send({ error: 'Server not found' });
+    if (!orgServerIds.includes(body.serverId)) {
+      return reply.status(404).send({ error: 'Server not found in your organization' });
     }
 
     // Check if agent name exists on server
@@ -149,18 +188,14 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
     const agent = await prisma.agent.findFirst({
-      where: { id, serverId: { in: serverIds } },
+      where: { id, serverId: { in: orgServerIds } },
       include: {
         server: { select: { id: true, name: true, url: true } },
         supervisor: { select: { id: true, name: true, displayName: true } },
@@ -217,19 +252,15 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
     const body = updateAgentSchema.parse(request.body);
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
     const agent = await prisma.agent.findFirst({
-      where: { id, serverId: { in: serverIds } },
+      where: { id, serverId: { in: orgServerIds } },
     });
 
     if (!agent) {
@@ -258,18 +289,14 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
     const agent = await prisma.agent.findFirst({
-      where: { id, serverId: { in: serverIds } },
+      where: { id, serverId: { in: orgServerIds } },
     });
 
     if (!agent) {
@@ -292,22 +319,18 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId, role } = request.user as { userId: string; role: string };
+    const { userId, organizationId, role } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
     if (role !== 'ADMIN' && role !== 'MANAGER') {
       return reply.status(403).send({ error: 'Only admins can validate agents' });
     }
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
     const agent = await prisma.agent.findFirst({
-      where: { id, serverId: { in: serverIds } },
+      where: { id, serverId: { in: orgServerIds } },
     });
 
     if (!agent) {
@@ -352,19 +375,15 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const query = request.query as { serverId?: string };
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
     const agents = await prisma.agent.findMany({
       where: {
-        serverId: query.serverId || { in: serverIds },
+        serverId: query.serverId || { in: orgServerIds },
       },
       select: {
         id: true,
@@ -388,6 +407,185 @@ export async function agentRoutes(fastify: FastifyInstance) {
 
     return {
       hierarchy: buildTree(null),
+    };
+  });
+
+  // Get agent execution history
+  fastify.get('/:id/executions', {
+    schema: {
+      tags: ['Agents'],
+      description: 'Get execution history for an agent',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          status: { type: 'string', enum: ['QUEUED', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT'] },
+        },
+      },
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { organizationId } = getTenantContext(request.user);
+    const { id } = request.params as { id: string };
+    const query = request.query as { page?: number; pageSize?: number; status?: string };
+
+    const page = query.page || 1;
+    const pageSize = query.pageSize || 20;
+    const skip = (page - 1) * pageSize;
+
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
+
+    // Verify agent belongs to organization
+    const agent = await prisma.agent.findFirst({
+      where: { id, serverId: { in: orgServerIds } },
+    });
+
+    if (!agent) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    // Build where clause
+    const where = {
+      agentId: id,
+      ...(query.status && { status: query.status as any }),
+    };
+
+    // Get executions with pagination
+    const [executions, total] = await Promise.all([
+      prisma.taskExecution.findMany({
+        where,
+        include: {
+          task: {
+            select: {
+              id: true,
+              title: true,
+              priority: true,
+            },
+          },
+        },
+        orderBy: { startedAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.taskExecution.count({ where }),
+    ]);
+
+    return {
+      executions: executions.map((e) => ({
+        id: e.id,
+        taskId: e.taskId,
+        taskTitle: e.task.title,
+        taskPriority: e.task.priority,
+        status: e.status,
+        prompt: e.prompt.substring(0, 200) + (e.prompt.length > 200 ? '...' : ''),
+        output: e.output ? (e.output.substring(0, 200) + (e.output.length > 200 ? '...' : '')) : null,
+        error: e.error,
+        exitCode: e.exitCode,
+        tokensUsed: e.tokensUsed,
+        durationMs: e.durationMs,
+        startedAt: e.startedAt,
+        completedAt: e.completedAt,
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  });
+
+  // Get agent statistics
+  fastify.get('/:id/stats', {
+    schema: {
+      tags: ['Agents'],
+      description: 'Get execution statistics for an agent',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', format: 'date-time', description: 'Filter stats since this date' },
+        },
+      },
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { organizationId } = getTenantContext(request.user);
+    const { id } = request.params as { id: string };
+    const query = request.query as { since?: string };
+
+    // Get organization's servers
+    const orgServerIds = await getOrganizationServerIds(organizationId);
+
+    // Verify agent belongs to organization
+    const agent = await prisma.agent.findFirst({
+      where: { id, serverId: { in: orgServerIds } },
+    });
+
+    if (!agent) {
+      return reply.status(404).send({ error: 'Agent not found' });
+    }
+
+    const sinceDate = query.since ? new Date(query.since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: last 30 days
+
+    // Get execution stats
+    const executions = await prisma.taskExecution.groupBy({
+      by: ['status'],
+      where: {
+        agentId: id,
+        startedAt: { gte: sinceDate },
+      },
+      _count: true,
+    });
+
+    // Get aggregate stats
+    const aggregates = await prisma.taskExecution.aggregate({
+      where: {
+        agentId: id,
+        startedAt: { gte: sinceDate },
+        completedAt: { not: null },
+      },
+      _avg: {
+        durationMs: true,
+        tokensUsed: true,
+      },
+      _sum: {
+        tokensUsed: true,
+      },
+      _count: true,
+    });
+
+    // Build status breakdown
+    const statusCounts: Record<string, number> = {};
+    let totalExecutions = 0;
+    for (const e of executions) {
+      statusCounts[e.status] = e._count;
+      totalExecutions += e._count;
+    }
+
+    const successCount = statusCounts['COMPLETED'] || 0;
+    const failureCount = (statusCounts['FAILED'] || 0) + (statusCounts['TIMEOUT'] || 0);
+
+    return {
+      agentId: id,
+      agentName: agent.name,
+      period: {
+        from: sinceDate.toISOString(),
+        to: new Date().toISOString(),
+      },
+      summary: {
+        totalExecutions,
+        successCount,
+        failureCount,
+        successRate: totalExecutions > 0 ? Math.round((successCount / totalExecutions) * 100) : 0,
+        avgDurationMs: Math.round(aggregates._avg.durationMs || 0),
+        avgTokensUsed: Math.round(aggregates._avg.tokensUsed || 0),
+        totalTokensUsed: aggregates._sum.tokensUsed || 0,
+      },
+      breakdown: statusCounts,
     };
   });
 
@@ -422,19 +620,17 @@ export async function agentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId, organizationId } = getTenantContext(request.user);
     const body = z.object({
       serverId: z.string().uuid(),
       prompt: z.string().min(10).max(1000),
     }).parse(request.body);
 
-    // Verify server belongs to user
-    const server = await prisma.serverConfiguration.findFirst({
-      where: { id: body.serverId, userId },
-    });
+    // Verify server belongs to organization
+    const orgServerIds = await getOrganizationServerIds(organizationId);
 
-    if (!server) {
-      return reply.status(404).send({ error: 'Server not found' });
+    if (!orgServerIds.includes(body.serverId)) {
+      return reply.status(404).send({ error: 'Server not found in your organization' });
     }
 
     // Parse the prompt to extract agent configuration

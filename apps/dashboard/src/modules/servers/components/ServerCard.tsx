@@ -1,4 +1,5 @@
-import { Server, MoreVertical, Trash2, Edit, RefreshCw, ExternalLink } from 'lucide-react';
+import { Server, MoreVertical, Trash2, Edit, RefreshCw, ExternalLink, LayoutDashboard, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../components/ui/button';
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ interface ServerCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onTestConnection?: () => void;
+  onViewDashboard?: () => void;
 }
 
 export function ServerCard({
@@ -27,7 +29,19 @@ export function ServerCard({
   onEdit,
   onDelete,
   onTestConnection,
+  onViewDashboard,
 }: ServerCardProps) {
+  const navigate = useNavigate();
+
+  const handleViewDashboard = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onViewDashboard) {
+      onViewDashboard();
+    } else {
+      navigate(`/servers/${server.id}`);
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -67,6 +81,11 @@ export function ServerCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleViewDashboard}>
+              <LayoutDashboard className="h-4 w-4 mr-2" />
+              View Dashboard
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(); }}>
               <Edit className="h-4 w-4 mr-2" />
               Edit
@@ -141,7 +160,15 @@ export function ServerCard({
             ? `Last check: ${new Date(server.lastHealthCheck).toLocaleString()}`
             : 'Never checked'}
         </span>
-        {server.serverVersion && <span>v{server.serverVersion}</span>}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={handleViewDashboard}
+        >
+          <Eye className="h-3 w-3 mr-1" />
+          View
+        </Button>
       </div>
     </div>
   );

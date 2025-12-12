@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import type { AgentStatusEvent, TodoProgressEvent, ExecutionStreamEvent } from '@mcp/types';
-import { apiClient } from '../api';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000';
 
@@ -50,9 +49,10 @@ const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 interface WebSocketProviderProps {
   children: ReactNode;
+  isAuthenticated?: boolean;
 }
 
-export function WebSocketProvider({ children }: WebSocketProviderProps) {
+export function WebSocketProvider({ children, isAuthenticated = false }: WebSocketProviderProps) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -68,14 +68,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const subscriptions = useRef<Set<string>>(new Set());
   const chatSubscriptions = useRef<Set<string>>(new Set());
 
-  // Initialize socket connection
+  // Initialize socket connection when authenticated
   useEffect(() => {
-    // Use apiClient token which is validated, not raw localStorage
-    const token = apiClient.getToken();
-    if (!token) return;
+    // Only connect when authenticated (cookies will be sent automatically)
+    if (!isAuthenticated) return;
 
     const socket = io(WS_URL, {
-      auth: { token },
+      withCredentials: true, // Send cookies with WebSocket connection
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -127,7 +126,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [isAuthenticated]);
 
   const subscribe = useCallback((type: 'agent' | 'server', id: string) => {
     const key = `${type}:${id}`;

@@ -110,6 +110,10 @@ export class MCPClient extends EventEmitter {
       maxReconnectAttempts: options.maxReconnectAttempts || 5,
       ...options,
     };
+    // Add default error handler to prevent unhandled 'error' events from crashing the process
+    this.on('error', (err) => {
+      console.error(`[MCPClient] Connection error for ${this.options.serverUrl}:`, err.message);
+    });
   }
 
   get connectionState(): MCPClientState {

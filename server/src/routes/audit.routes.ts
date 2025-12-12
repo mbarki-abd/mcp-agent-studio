@@ -173,6 +173,74 @@ export async function auditRoutes(fastify: FastifyInstance) {
     return auditService.getResourceHistory(resource, resourceId, limit);
   });
 
+  // Verify integrity of recent audit logs
+  fastify.get('/verify-integrity', {
+    schema: {
+      tags: ['Audit'],
+      description: 'Verify integrity of recent audit logs (admin only)',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', minimum: 1, maximum: 1000, default: 100 },
+        },
+      },
+    },
+  }, async (request: FastifyRequest) => {
+    const { limit = 100 } = request.query as { limit?: number };
+    return auditService.verifyRecentLogs(limit);
+  });
+
+  // Export audit logs (for compliance/archival)
+  fastify.get('/export', {
+    schema: {
+      tags: ['Audit'],
+      description: 'Export audit logs for compliance (admin only)',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          startDate: { type: 'string', format: 'date-time' },
+          endDate: { type: 'string', format: 'date-time' },
+          format: { type: 'string', enum: ['json', 'csv'], default: 'json' },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { startDate, endDate, format = 'json' } = request.query as {
+      startDate?: string;
+      endDate?: string;
+      format?: 'json' | 'csv';
+    };
+
+    const result = await auditService.exportLogs({
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    });
+
+    // Log this export action
+    const user = request.user as { userId: string; email?: string };
+    auditService.logSuccess('EXPORT_DATA', 'audit_logs', {
+      userId: user.userId,
+      userEmail: user.email,
+      metadata: {
+        logsExported: result.logs.length,
+        startDate,
+        endDate,
+        format,
+      },
+    });
+
+    if (format === 'csv') {
+      const csv = auditService.convertToCSV(result.logs);
+      reply.header('Content-Type', 'text/csv');
+      reply.header('Content-Disposition', `attachment; filename="audit-logs-${new Date().toISOString().split('T')[0]}.csv"`);
+      return csv;
+    }
+
+    return result;
+  });
+
   // Cleanup old logs (dangerous - requires explicit confirmation)
   fastify.delete('/cleanup', {
     schema: {
@@ -194,6 +262,17 @@ export async function auditRoutes(fastify: FastifyInstance) {
     if (!confirm) {
       return reply.status(400).send({ error: 'Confirmation required' });
     }
+
+    // Log cleanup action before performing it
+    const user = request.user as { userId: string; email?: string };
+    auditService.logSuccess('ADMIN_ACTION', 'audit_logs', {
+      userId: user.userId,
+      userEmail: user.email,
+      metadata: {
+        action: 'cleanup',
+        daysToKeep,
+      },
+    });
 
     const result = await auditService.cleanup(daysToKeep);
     return {

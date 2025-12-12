@@ -2,6 +2,17 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
 import { getTaskExecutionService } from '../services/task-execution.service.js';
+import { getTenantContext, getOrganizationUserIds } from '../utils/tenant.js';
+import {
+  parsePagination,
+  buildPaginatedResponse,
+  calculateSkip,
+  buildOrderBy,
+  validateSortField,
+} from '../utils/pagination.js';
+
+// Allowed sort fields for tasks
+const TASK_SORT_FIELDS = ['createdAt', 'updatedAt', 'title', 'status', 'priority', 'scheduledAt', 'nextRunAt'];
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
@@ -33,82 +44,103 @@ const updateTaskSchema = createTaskSchema.partial().extend({
 });
 
 export async function taskRoutes(fastify: FastifyInstance) {
-  // List tasks
+  // List tasks (all org tasks)
   fastify.get('/', {
     schema: {
       tags: ['Tasks'],
-      description: 'List all tasks',
+      description: 'List all tasks in the organization',
       security: [{ bearerAuth: [] }],
       querystring: {
         type: 'object',
         properties: {
+          page: { type: 'number', minimum: 1, default: 1 },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
+          sortBy: { type: 'string', enum: TASK_SORT_FIELDS },
+          sortOrder: { type: 'string', enum: ['asc', 'desc'], default: 'desc' },
           status: { type: 'string' },
+          priority: { type: 'string' },
           agentId: { type: 'string' },
           serverId: { type: 'string' },
-          limit: { type: 'number', default: 50 },
-          offset: { type: 'number', default: 0 },
+          executionMode: { type: 'string' },
+          search: { type: 'string' },
         },
       },
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const query = request.query as {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
       status?: string;
+      priority?: string;
       agentId?: string;
       serverId?: string;
-      limit: number;
-      offset: number;
+      executionMode?: string;
+      search?: string;
     };
 
+    // Parse pagination
+    const pagination = parsePagination(query);
+    const validSortBy = validateSortField(pagination.sortBy, TASK_SORT_FIELDS);
+
+    // Get all user IDs in the organization
+    const orgUserIds = await getOrganizationUserIds(organizationId);
+
+    // Build where clause
+    const where: any = {
+      createdById: { in: orgUserIds },
+      ...(query.status && { status: query.status as any }),
+      ...(query.priority && { priority: query.priority as any }),
+      ...(query.agentId && { agentId: query.agentId }),
+      ...(query.serverId && { serverId: query.serverId }),
+      ...(query.executionMode && { executionMode: query.executionMode as any }),
+    };
+
+    if (query.search) {
+      where.OR = [
+        { title: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+        { prompt: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get total count
+    const total = await prisma.task.count({ where });
+
     const tasks = await prisma.task.findMany({
-      where: {
-        createdById: userId,
-        ...(query.status && { status: query.status as any }),
-        ...(query.agentId && { agentId: query.agentId }),
-        ...(query.serverId && { serverId: query.serverId }),
-      },
+      where,
       include: {
         agent: { select: { id: true, name: true, displayName: true } },
         server: { select: { id: true, name: true } },
         _count: { select: { executions: true } },
       },
-      orderBy: { createdAt: 'desc' },
-      take: query.limit,
-      skip: query.offset,
+      skip: calculateSkip(pagination.page, pagination.limit),
+      take: pagination.limit,
+      orderBy: buildOrderBy(validSortBy, pagination.sortOrder),
     });
 
-    const total = await prisma.task.count({
-      where: {
-        createdById: userId,
-        ...(query.status && { status: query.status as any }),
-        ...(query.agentId && { agentId: query.agentId }),
-        ...(query.serverId && { serverId: query.serverId }),
-      },
-    });
+    const data = tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      priority: t.priority,
+      status: t.status,
+      agent: t.agent,
+      server: t.server,
+      executionMode: t.executionMode,
+      scheduledAt: t.scheduledAt,
+      nextRunAt: t.nextRunAt,
+      lastRunAt: t.lastRunAt,
+      runCount: t.runCount,
+      executionCount: t._count.executions,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
 
-    return {
-      tasks: tasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        priority: t.priority,
-        status: t.status,
-        agent: t.agent,
-        server: t.server,
-        executionMode: t.executionMode,
-        scheduledAt: t.scheduledAt,
-        nextRunAt: t.nextRunAt,
-        lastRunAt: t.lastRunAt,
-        runCount: t.runCount,
-        executionCount: t._count.executions,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      })),
-      total,
-      limit: query.limit,
-      offset: query.offset,
-    };
+    return buildPaginatedResponse(data, total, pagination.page, pagination.limit);
   });
 
   // Create task
@@ -120,7 +152,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId, organizationId } = getTenantContext(request.user);
     const body = createTaskSchema.parse(request.body);
 
     // Determine initial status
@@ -139,12 +171,13 @@ export async function taskRoutes(fastify: FastifyInstance) {
       nextRunAt = new Date(body.startDate);
     }
 
-    // Validate dependencies exist and belong to user
+    // Validate dependencies exist and belong to organization
     if (body.dependsOnIds && body.dependsOnIds.length > 0) {
+      const orgUserIds = await getOrganizationUserIds(organizationId);
       const deps = await prisma.task.findMany({
         where: {
           id: { in: body.dependsOnIds },
-          createdById: userId,
+          createdById: { in: orgUserIds },
         },
         select: { id: true },
       });
@@ -206,11 +239,14 @@ export async function taskRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
+    // Get all user IDs in the organization
+    const orgUserIds = await getOrganizationUserIds(organizationId);
+
     const task = await prisma.task.findFirst({
-      where: { id, createdById: userId },
+      where: { id, createdById: { in: orgUserIds } },
       include: {
         agent: { select: { id: true, name: true, displayName: true, status: true } },
         server: { select: { id: true, name: true, url: true } },
@@ -246,7 +282,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     const dependentTasks = await prisma.task.findMany({
       where: {
         dependsOnIds: { has: id },
-        createdById: userId,
+        createdById: { in: orgUserIds },
       },
       select: { id: true, title: true, status: true },
     });
@@ -286,19 +322,20 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Update task
+  // Update task (owner only)
   fastify.put('/:id', {
     schema: {
       tags: ['Tasks'],
-      description: 'Update task',
+      description: 'Update task (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
     const body = updateTaskSchema.parse(request.body);
 
+    // Only owner can update
     const task = await prisma.task.findFirst({
       where: { id, createdById: userId },
     });
@@ -329,18 +366,19 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Delete task
+  // Delete task (owner only)
   fastify.delete('/:id', {
     schema: {
       tags: ['Tasks'],
-      description: 'Delete task',
+      description: 'Delete task (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
+    // Only owner can delete
     const task = await prisma.task.findFirst({
       where: { id, createdById: userId },
     });
@@ -356,16 +394,16 @@ export async function taskRoutes(fastify: FastifyInstance) {
     return { message: 'Task deleted successfully' };
   });
 
-  // Execute task now
+  // Execute task now (owner only)
   fastify.post('/:id/execute', {
     schema: {
       tags: ['Tasks'],
-      description: 'Execute task immediately',
+      description: 'Execute task immediately (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
     try {
@@ -422,16 +460,16 @@ export async function taskRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Retry a failed execution
+  // Retry a failed execution (owner only)
   fastify.post('/executions/:executionId/retry', {
     schema: {
       tags: ['Tasks'],
-      description: 'Retry a failed execution',
+      description: 'Retry a failed execution (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { executionId } = request.params as { executionId: string };
 
     try {
@@ -451,18 +489,19 @@ export async function taskRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Cancel task execution
+  // Cancel task execution (owner only)
   fastify.post('/:id/cancel', {
     schema: {
       tags: ['Tasks'],
-      description: 'Cancel a running or queued task',
+      description: 'Cancel a running or queued task (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
+    // Only owner can cancel
     const task = await prisma.task.findFirst({
       where: { id, createdById: userId },
     });
@@ -500,7 +539,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Get task executions
+  // Get task executions (org visible)
   fastify.get('/:id/executions', {
     schema: {
       tags: ['Tasks'],
@@ -509,11 +548,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
+    const orgUserIds = await getOrganizationUserIds(organizationId);
     const task = await prisma.task.findFirst({
-      where: { id, createdById: userId },
+      where: { id, createdById: { in: orgUserIds } },
     });
 
     if (!task) {
@@ -543,7 +583,7 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Check task dependencies status
+  // Check task dependencies status (org visible)
   fastify.get('/:id/dependencies', {
     schema: {
       tags: ['Tasks'],
@@ -552,11 +592,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
 
+    const orgUserIds = await getOrganizationUserIds(organizationId);
     const task = await prisma.task.findFirst({
-      where: { id, createdById: userId },
+      where: { id, createdById: { in: orgUserIds } },
     });
 
     if (!task) {
@@ -571,11 +612,11 @@ export async function taskRoutes(fastify: FastifyInstance) {
         })
       : [];
 
-    // Manually fetch dependent tasks
+    // Manually fetch dependent tasks (within org)
     const dependentTasks = await prisma.task.findMany({
       where: {
         dependsOnIds: { has: id },
-        createdById: userId,
+        createdById: { in: orgUserIds },
       },
       select: { id: true, title: true, status: true },
     });
@@ -599,21 +640,22 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Add dependencies to a task
+  // Add dependencies to a task (owner only)
   fastify.post('/:id/dependencies', {
     schema: {
       tags: ['Tasks'],
-      description: 'Add dependencies to a task',
+      description: 'Add dependencies to a task (owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId, organizationId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
     const body = z.object({
       dependsOnIds: z.array(z.string().uuid()).min(1),
     }).parse(request.body);
 
+    // Only owner can modify dependencies
     const task = await prisma.task.findFirst({
       where: { id, createdById: userId },
     });
@@ -622,11 +664,12 @@ export async function taskRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Task not found' });
     }
 
-    // Validate dependencies exist and belong to user
+    // Validate dependencies exist and belong to organization
+    const orgUserIds = await getOrganizationUserIds(organizationId);
     const deps = await prisma.task.findMany({
       where: {
         id: { in: body.dependsOnIds },
-        createdById: userId,
+        createdById: { in: orgUserIds },
       },
       select: { id: true },
     });
@@ -668,21 +711,391 @@ export async function taskRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Remove dependencies from a task
-  fastify.delete('/:id/dependencies', {
+  // ========================================
+  // BULK OPERATIONS
+  // ========================================
+
+  // Bulk cancel tasks
+  fastify.post('/bulk/cancel', {
     schema: {
       tags: ['Tasks'],
-      description: 'Remove dependencies from a task',
+      description: 'Cancel multiple tasks at once',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
+    const body = z.object({
+      taskIds: z.array(z.string().uuid()).min(1).max(100),
+    }).parse(request.body);
+
+    // Get tasks owned by user that are cancellable
+    const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: body.taskIds },
+        createdById: userId,
+        status: { in: ['RUNNING', 'QUEUED', 'PENDING', 'SCHEDULED'] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (tasks.length === 0) {
+      return reply.status(400).send({
+        error: 'No cancellable tasks found',
+        details: 'Tasks must be owned by you and in RUNNING, QUEUED, PENDING, or SCHEDULED status',
+      });
+    }
+
+    const taskIds = tasks.map(t => t.id);
+
+    // Cancel tasks
+    await prisma.task.updateMany({
+      where: { id: { in: taskIds } },
+      data: { status: 'CANCELLED' },
+    });
+
+    // Cancel any running executions
+    await prisma.taskExecution.updateMany({
+      where: {
+        taskId: { in: taskIds },
+        status: { in: ['RUNNING', 'QUEUED'] },
+      },
+      data: {
+        status: 'CANCELLED',
+        completedAt: new Date(),
+      },
+    });
+
+    const notFound = body.taskIds.filter(id => !taskIds.includes(id));
+
+    return {
+      cancelled: taskIds.length,
+      taskIds,
+      notCancelled: notFound.length,
+      notCancelledIds: notFound,
+      message: `${taskIds.length} task(s) cancelled successfully`,
+    };
+  });
+
+  // Bulk delete tasks
+  fastify.post('/bulk/delete', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Delete multiple tasks at once',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = getTenantContext(request.user);
+    const body = z.object({
+      taskIds: z.array(z.string().uuid()).min(1).max(100),
+      force: z.boolean().optional().default(false),
+    }).parse(request.body);
+
+    // Get tasks owned by user
+    const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: body.taskIds },
+        createdById: userId,
+      },
+      select: { id: true, status: true },
+    });
+
+    if (tasks.length === 0) {
+      return reply.status(400).send({
+        error: 'No deletable tasks found',
+        details: 'Tasks must be owned by you',
+      });
+    }
+
+    // Check for running tasks unless force is true
+    const runningTasks = tasks.filter(t => t.status === 'RUNNING' || t.status === 'QUEUED');
+    if (runningTasks.length > 0 && !body.force) {
+      return reply.status(400).send({
+        error: 'Cannot delete running tasks',
+        runningTaskIds: runningTasks.map(t => t.id),
+        hint: 'Set force=true to cancel and delete running tasks',
+      });
+    }
+
+    const taskIds = tasks.map(t => t.id);
+
+    // If force, cancel running tasks first
+    if (body.force && runningTasks.length > 0) {
+      const runningIds = runningTasks.map(t => t.id);
+      await prisma.task.updateMany({
+        where: { id: { in: runningIds } },
+        data: { status: 'CANCELLED' },
+      });
+      await prisma.taskExecution.updateMany({
+        where: {
+          taskId: { in: runningIds },
+          status: { in: ['RUNNING', 'QUEUED'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          completedAt: new Date(),
+        },
+      });
+    }
+
+    // Delete executions first
+    await prisma.taskExecution.deleteMany({
+      where: { taskId: { in: taskIds } },
+    });
+
+    // Delete tasks
+    await prisma.task.deleteMany({
+      where: { id: { in: taskIds } },
+    });
+
+    const notFound = body.taskIds.filter(id => !taskIds.includes(id));
+
+    return {
+      deleted: taskIds.length,
+      taskIds,
+      notDeleted: notFound.length,
+      notDeletedIds: notFound,
+      message: `${taskIds.length} task(s) deleted successfully`,
+    };
+  });
+
+  // Bulk update task status
+  fastify.post('/bulk/status', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Update status of multiple tasks at once',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = getTenantContext(request.user);
+    const body = z.object({
+      taskIds: z.array(z.string().uuid()).min(1).max(100),
+      status: z.enum(['DRAFT', 'PENDING', 'SCHEDULED', 'CANCELLED']),
+    }).parse(request.body);
+
+    // Cannot set to RUNNING/QUEUED/COMPLETED via bulk update
+    if (['RUNNING', 'QUEUED', 'COMPLETED'].includes(body.status)) {
+      return reply.status(400).send({
+        error: 'Invalid status for bulk update',
+        hint: 'Use bulk/cancel to cancel tasks, or execute them to change to RUNNING',
+      });
+    }
+
+    // Get tasks owned by user that are not currently running
+    const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: body.taskIds },
+        createdById: userId,
+        status: { notIn: ['RUNNING', 'QUEUED'] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (tasks.length === 0) {
+      return reply.status(400).send({
+        error: 'No updateable tasks found',
+        details: 'Tasks must be owned by you and not in RUNNING or QUEUED status',
+      });
+    }
+
+    const taskIds = tasks.map(t => t.id);
+
+    // Update tasks
+    await prisma.task.updateMany({
+      where: { id: { in: taskIds } },
+      data: { status: body.status },
+    });
+
+    const notUpdated = body.taskIds.filter(id => !taskIds.includes(id));
+
+    return {
+      updated: taskIds.length,
+      taskIds,
+      newStatus: body.status,
+      notUpdated: notUpdated.length,
+      notUpdatedIds: notUpdated,
+      message: `${taskIds.length} task(s) updated to ${body.status}`,
+    };
+  });
+
+  // Bulk execute tasks
+  fastify.post('/bulk/execute', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Execute multiple tasks at once',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = getTenantContext(request.user);
+    const body = z.object({
+      taskIds: z.array(z.string().uuid()).min(1).max(20), // Lower limit for execution
+      sequential: z.boolean().optional().default(false),
+    }).parse(request.body);
+
+    // Get tasks owned by user that can be executed
+    const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: body.taskIds },
+        createdById: userId,
+        status: { in: ['DRAFT', 'PENDING', 'SCHEDULED', 'COMPLETED', 'FAILED'] },
+      },
+      select: { id: true, title: true, status: true },
+    });
+
+    if (tasks.length === 0) {
+      return reply.status(400).send({
+        error: 'No executable tasks found',
+        details: 'Tasks must be owned by you and not currently running',
+      });
+    }
+
+    const taskIds = tasks.map(t => t.id);
+    const executionService = getTaskExecutionService();
+    const results: Array<{
+      taskId: string;
+      title: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    if (body.sequential) {
+      // Execute sequentially
+      for (const task of tasks) {
+        try {
+          await executionService.executeTask(task.id, userId);
+          results.push({ taskId: task.id, title: task.title, success: true });
+        } catch (error) {
+          results.push({
+            taskId: task.id,
+            title: task.title,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    } else {
+      // Execute in parallel
+      const execPromises = tasks.map(async (task) => {
+        try {
+          await executionService.executeTask(task.id, userId);
+          return { taskId: task.id, title: task.title, success: true };
+        } catch (error) {
+          return {
+            taskId: task.id,
+            title: task.title,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          };
+        }
+      });
+      results.push(...await Promise.all(execPromises));
+    }
+
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
+    const notFound = body.taskIds.filter(id => !taskIds.includes(id));
+
+    return {
+      total: results.length,
+      successful: successful.length,
+      failed: failed.length,
+      notFound: notFound.length,
+      results,
+      notFoundIds: notFound,
+      message: `${successful.length}/${results.length} task(s) executed successfully`,
+    };
+  });
+
+  // Bulk retry failed tasks
+  fastify.post('/bulk/retry', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Retry multiple failed tasks',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = getTenantContext(request.user);
+    const body = z.object({
+      taskIds: z.array(z.string().uuid()).min(1).max(20),
+    }).parse(request.body);
+
+    // Get tasks owned by user that failed
+    const tasks = await prisma.task.findMany({
+      where: {
+        id: { in: body.taskIds },
+        createdById: userId,
+        status: 'FAILED',
+      },
+      select: { id: true, title: true },
+    });
+
+    if (tasks.length === 0) {
+      return reply.status(400).send({
+        error: 'No failed tasks found to retry',
+        details: 'Tasks must be owned by you and in FAILED status',
+      });
+    }
+
+    const taskIds = tasks.map(t => t.id);
+    const executionService = getTaskExecutionService();
+    const results: Array<{
+      taskId: string;
+      title: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
+    // Execute retries in parallel
+    const execPromises = tasks.map(async (task) => {
+      try {
+        await executionService.executeTask(task.id, userId);
+        return { taskId: task.id, title: task.title, success: true };
+      } catch (error) {
+        return {
+          taskId: task.id,
+          title: task.title,
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
+    results.push(...await Promise.all(execPromises));
+
+    const successful = results.filter(r => r.success);
+    const failed = results.filter(r => !r.success);
+    const notFound = body.taskIds.filter(id => !taskIds.includes(id));
+
+    return {
+      total: results.length,
+      successful: successful.length,
+      failed: failed.length,
+      notFound: notFound.length,
+      results,
+      notFoundIds: notFound,
+      message: `${successful.length}/${results.length} task(s) retried successfully`,
+    };
+  });
+
+  // Remove dependencies from a task (owner only)
+  fastify.delete('/:id/dependencies', {
+    schema: {
+      tags: ['Tasks'],
+      description: 'Remove dependencies from a task (owner only)',
+      security: [{ bearerAuth: [] }],
+    },
+    preHandler: [fastify.authenticate],
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { userId } = getTenantContext(request.user);
     const { id } = request.params as { id: string };
     const body = z.object({
       dependsOnIds: z.array(z.string().uuid()).min(1),
     }).parse(request.body);
 
+    // Only owner can modify dependencies
     const task = await prisma.task.findFirst({
       where: { id, createdById: userId },
     });

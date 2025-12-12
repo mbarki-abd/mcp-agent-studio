@@ -2,11 +2,16 @@
  * Audit Logging Service
  *
  * Provides comprehensive audit logging for security, compliance,
- * and debugging purposes.
+ * and debugging purposes. Includes integrity verification to
+ * ensure logs have not been tampered with.
  */
 
 import { AuditAction, AuditStatus, Prisma } from '@prisma/client';
 import { prisma } from '../index.js';
+import crypto from 'crypto';
+
+// Secret key for HMAC (in production, use env variable)
+const AUDIT_INTEGRITY_SECRET = process.env.AUDIT_INTEGRITY_SECRET || 'audit-integrity-secret-change-in-production';
 
 export interface AuditEntry {
   userId?: string;
@@ -41,10 +46,77 @@ export interface AuditQueryOptions {
 
 class AuditService {
   /**
-   * Log an audit entry
+   * Generate an integrity hash for an audit entry
+   * This helps detect if logs have been tampered with
+   */
+  private generateIntegrityHash(data: Record<string, unknown>, timestamp: Date): string {
+    const payload = JSON.stringify({
+      ...data,
+      timestamp: timestamp.toISOString(),
+    });
+    return crypto.createHmac('sha256', AUDIT_INTEGRITY_SECRET).update(payload).digest('hex');
+  }
+
+  /**
+   * Verify the integrity of an audit log entry
+   */
+  verifyIntegrity(log: {
+    userId?: string | null;
+    userEmail?: string | null;
+    action: string;
+    resource: string;
+    resourceId?: string | null;
+    status?: string | null;
+    timestamp: Date;
+    metadata?: unknown;
+  }): boolean {
+    const metadata = log.metadata as Record<string, unknown> | null;
+    if (!metadata || !metadata.integrityHash) {
+      return false; // No integrity hash present
+    }
+
+    const expectedHash = this.generateIntegrityHash(
+      {
+        userId: log.userId,
+        userEmail: log.userEmail,
+        action: log.action,
+        resource: log.resource,
+        resourceId: log.resourceId,
+        status: log.status,
+      },
+      log.timestamp
+    );
+
+    return metadata.integrityHash === expectedHash;
+  }
+
+  /**
+   * Log an audit entry with integrity hash
    */
   async log(entry: AuditEntry): Promise<void> {
     try {
+      const timestamp = new Date();
+
+      // Generate integrity hash
+      const integrityHash = this.generateIntegrityHash(
+        {
+          userId: entry.userId,
+          userEmail: entry.userEmail,
+          action: entry.action,
+          resource: entry.resource,
+          resourceId: entry.resourceId,
+          status: entry.status ?? 'SUCCESS',
+        },
+        timestamp
+      );
+
+      // Merge integrity hash into metadata
+      const metadata = {
+        ...(entry.metadata || {}),
+        integrityHash,
+        version: 2, // Audit log format version
+      };
+
       await prisma.auditLog.create({
         data: {
           userId: entry.userId,
@@ -60,9 +132,10 @@ class AuditService {
           statusCode: entry.statusCode,
           oldValue: entry.oldValue as Prisma.InputJsonValue,
           newValue: entry.newValue as Prisma.InputJsonValue,
-          metadata: entry.metadata as Prisma.InputJsonValue,
+          metadata: metadata as Prisma.InputJsonValue,
           errorMessage: entry.errorMessage,
           duration: entry.duration,
+          timestamp,
         },
       });
     } catch (error) {
@@ -238,6 +311,108 @@ class AuditService {
     });
 
     return { deleted: result.count };
+  }
+
+  /**
+   * Verify integrity of recent audit logs
+   */
+  async verifyRecentLogs(limit = 100) {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: limit,
+    });
+
+    const results = {
+      total: logs.length,
+      valid: 0,
+      invalid: 0,
+      noHash: 0,
+      tamperedLogs: [] as { id: string; timestamp: Date; action: string }[],
+    };
+
+    for (const log of logs) {
+      const isValid = this.verifyIntegrity(log);
+      const metadata = log.metadata as Record<string, unknown> | null;
+
+      if (!metadata || !metadata.integrityHash) {
+        results.noHash++;
+      } else if (isValid) {
+        results.valid++;
+      } else {
+        results.invalid++;
+        results.tamperedLogs.push({
+          id: log.id,
+          timestamp: log.timestamp,
+          action: log.action,
+        });
+      }
+    }
+
+    return {
+      ...results,
+      integrityScore: results.total > 0
+        ? Math.round(((results.valid + results.noHash) / results.total) * 100)
+        : 100,
+      message: results.invalid > 0
+        ? `Warning: ${results.invalid} logs may have been tampered with`
+        : 'All logs with integrity hashes are valid',
+    };
+  }
+
+  /**
+   * Export audit logs for compliance
+   */
+  async exportLogs(options: { startDate?: Date; endDate?: Date }) {
+    const where: Prisma.AuditLogWhereInput = {};
+
+    if (options.startDate || options.endDate) {
+      where.timestamp = {};
+      if (options.startDate) where.timestamp.gte = options.startDate;
+      if (options.endDate) where.timestamp.lte = options.endDate;
+    }
+
+    const logs = await prisma.auditLog.findMany({
+      where,
+      orderBy: { timestamp: 'desc' },
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      totalRecords: logs.length,
+      dateRange: {
+        from: options.startDate?.toISOString() || 'beginning',
+        to: options.endDate?.toISOString() || 'now',
+      },
+      logs,
+    };
+  }
+
+  /**
+   * Convert logs to CSV format
+   */
+  convertToCSV(logs: Array<Record<string, unknown>>): string {
+    if (logs.length === 0) return '';
+
+    const headers = [
+      'id', 'timestamp', 'userId', 'userEmail', 'action', 'resource',
+      'resourceId', 'status', 'statusCode', 'method', 'path',
+      'ipAddress', 'userAgent', 'duration', 'errorMessage',
+    ];
+
+    const escapeCSV = (value: unknown): string => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = logs.map(log =>
+      headers.map(header => escapeCSV(log[header])).join(',')
+    );
+
+    return [headers.join(','), ...rows].join('\n');
   }
 }
 

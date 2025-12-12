@@ -66,17 +66,48 @@ async function runVisualTests() {
       await page.fill('input[type="email"], input[name="email"]', TEST_USER.email);
       await page.fill('input[type="password"], input[name="password"]', TEST_USER.password);
 
-      // Capture token from response
-      const responsePromise = page.waitForResponse(resp => resp.url().includes('/auth') || resp.url().includes('/login'));
+      // Wait for login response with cookies
+      const responsePromise = page.waitForResponse(resp =>
+        resp.url().includes('/auth/login') && resp.status() === 200
+      );
+
       await page.click('button[type="submit"]');
 
       try {
         const response = await responsePromise;
-        const data = await response.json().catch(() => ({}));
-        authToken = data.token || data.accessToken;
-      } catch (e) {}
+        console.log('   Login response received, cookies set by server');
 
-      await page.waitForTimeout(2000);
+        // Wait for frontend to process the response and redirect
+        await page.waitForURL(url => !url.pathname.includes('login'), { timeout: 10000 }).catch(() => {
+          console.log('   ⚠️ No redirect detected, checking if already authenticated...');
+        });
+      } catch (e) {
+        console.log('   ⚠️ Login response error:', e.message);
+      }
+
+      // Wait for login form to disappear (indicates successful auth)
+      try {
+        await page.waitForSelector('form', { state: 'detached', timeout: 5000 });
+        console.log('   Login form disappeared - authentication successful');
+      } catch (e) {
+        // If form is still visible, check if there's an error or we need to wait more
+        const errorMsg = await page.locator('.text-red-500').textContent().catch(() => null);
+        if (errorMsg) {
+          console.log(`   ⚠️ Login error: ${errorMsg}`);
+        } else {
+          console.log('   ⚠️ Form still visible, waiting longer...');
+          await page.waitForTimeout(2000);
+        }
+      }
+
+      // Verify we're not on login page anymore by checking for dashboard elements
+      const dashboardVisible = await page.locator('[data-testid="dashboard"], nav, aside').first().isVisible().catch(() => false);
+      if (!dashboardVisible) {
+        console.log('   ⚠️ Dashboard not visible, trying page reload...');
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1000);
+      }
     }
     console.log('   ✅ Login complete\n');
 

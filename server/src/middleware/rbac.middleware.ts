@@ -100,10 +100,16 @@ declare module 'fastify' {
   interface FastifyRequest {
     ability: AppAbility;
   }
+  interface FastifyInstance {
+    requireRole: (minimumRole: string) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  }
 }
 
 async function rbacPlugin(fastify: ReturnType<typeof import('fastify').default>) {
   fastify.decorateRequest('ability', null);
+
+  // Decorate with requireRole function
+  fastify.decorate('requireRole', requireRole);
 
   fastify.addHook('preHandler', async (request: FastifyRequest) => {
     if (request.user) {
@@ -136,4 +142,28 @@ export function requirePermission(action: AppActions, subject: AppSubjects) {
 // Helper to check specific resource permission
 export function canAccess(ability: AppAbility, action: AppActions, subject: AppSubjects): boolean {
   return ability.can(action, subject);
+}
+
+// Role hierarchy (higher index = more permissions)
+const roleHierarchy = ['VIEWER', 'USER', 'OPERATOR', 'MANAGER', 'ADMIN'];
+
+// Helper middleware to require minimum role
+export function requireRole(minimumRole: string) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const userRole = (request.user as JWTPayload).role || 'VIEWER';
+    const userRoleIndex = roleHierarchy.indexOf(userRole);
+    const requiredRoleIndex = roleHierarchy.indexOf(minimumRole);
+
+    if (userRoleIndex < requiredRoleIndex) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: `This action requires ${minimumRole} role or higher`,
+        yourRole: userRole,
+      });
+    }
+  };
 }

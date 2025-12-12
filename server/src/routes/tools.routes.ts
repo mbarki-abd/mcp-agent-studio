@@ -2,6 +2,17 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
 import { getToolInstallationService } from '../services/tool-installation.service.js';
+import { getTenantContext, getOrganizationUserIds, getOrganizationServerIds } from '../utils/tenant.js';
+import {
+  parsePagination,
+  buildPaginatedResponse,
+  calculateSkip,
+  buildOrderBy,
+  validateSortField,
+} from '../utils/pagination.js';
+
+// Allowed sort fields for tools
+const TOOL_SORT_FIELDS = ['name', 'displayName', 'category'];
 
 const installToolSchema = z.object({
   toolId: z.string().uuid(),
@@ -32,36 +43,70 @@ export async function toolRoutes(fastify: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
+          page: { type: 'number', minimum: 1, default: 1 },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 20 },
+          sortBy: { type: 'string', enum: TOOL_SORT_FIELDS },
+          sortOrder: { type: 'string', enum: ['asc', 'desc'], default: 'asc' },
           category: { type: 'string' },
+          search: { type: 'string' },
         },
       },
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest) => {
-    const query = request.query as { category?: string };
+    const query = request.query as {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      category?: string;
+      search?: string;
+    };
+
+    // Parse pagination
+    const pagination = parsePagination(query);
+    const validSortBy = validateSortField(pagination.sortBy, TOOL_SORT_FIELDS);
+
+    // Build where clause
+    const where: any = {};
+    if (query.category) {
+      where.category = query.category as any;
+    }
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { displayName: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Get total count
+    const total = await prisma.toolDefinition.count({ where });
 
     const tools = await prisma.toolDefinition.findMany({
-      where: query.category ? { category: query.category as any } : undefined,
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+      where,
+      skip: calculateSkip(pagination.page, pagination.limit),
+      take: pagination.limit,
+      orderBy: buildOrderBy(validSortBy, pagination.sortOrder, 'name'),
     });
 
-    return {
-      tools: tools.map((t) => ({
-        id: t.id,
-        name: t.name,
-        displayName: t.displayName,
-        description: t.description,
-        category: t.category,
-        website: t.website,
-        documentation: t.documentation,
-        icon: t.icon,
-        tags: t.tags,
-        requiresSudo: t.requiresSudo,
-      })),
-    };
+    const data = tools.map((t) => ({
+      id: t.id,
+      name: t.name,
+      displayName: t.displayName,
+      description: t.description,
+      category: t.category,
+      website: t.website,
+      documentation: t.documentation,
+      icon: t.icon,
+      tags: t.tags,
+      requiresSudo: t.requiresSudo,
+    }));
+
+    return buildPaginatedResponse(data, total, pagination.page, pagination.limit);
   });
 
-  // Get tools installed on a server
+  // Get tools installed on a server (org visible)
   fastify.get('/servers/:serverId', {
     schema: {
       tags: ['Tools'],
@@ -70,12 +115,13 @@ export async function toolRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { serverId } = request.params as { serverId: string };
 
-    // Verify server belongs to user
+    // Verify server belongs to organization
+    const orgUserIds = await getOrganizationUserIds(organizationId);
     const server = await prisma.serverConfiguration.findFirst({
-      where: { id: serverId, userId },
+      where: { id: serverId, userId: { in: orgUserIds } },
     });
 
     if (!server) {
@@ -106,20 +152,20 @@ export async function toolRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Install tool on server
+  // Install tool on server (server owner only)
   fastify.post('/servers/:serverId/install', {
     schema: {
       tags: ['Tools'],
-      description: 'Install a tool on a server',
+      description: 'Install a tool on a server (server owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { serverId } = request.params as { serverId: string };
     const body = installToolSchema.parse(request.body);
 
-    // Verify server belongs to user
+    // Only server owner can install tools
     const server = await prisma.serverConfiguration.findFirst({
       where: { id: serverId, userId },
     });
@@ -186,19 +232,19 @@ export async function toolRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Uninstall tool from server
+  // Uninstall tool from server (server owner only)
   fastify.delete('/servers/:serverId/tools/:toolId', {
     schema: {
       tags: ['Tools'],
-      description: 'Uninstall a tool from a server',
+      description: 'Uninstall a tool from a server (server owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { serverId, toolId } = request.params as { serverId: string; toolId: string };
 
-    // Verify server belongs to user
+    // Only server owner can uninstall tools
     const server = await prisma.serverConfiguration.findFirst({
       where: { id: serverId, userId },
     });
@@ -226,7 +272,7 @@ export async function toolRoutes(fastify: FastifyInstance) {
     return { message: 'Tool uninstalled successfully' };
   });
 
-  // Check tool health
+  // Check tool health (org visible)
   fastify.post('/servers/:serverId/tools/:toolId/health', {
     schema: {
       tags: ['Tools'],
@@ -235,12 +281,13 @@ export async function toolRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { serverId, toolId } = request.params as { serverId: string; toolId: string };
 
-    // Verify server belongs to user
+    // Verify server belongs to organization
+    const orgUserIds = await getOrganizationUserIds(organizationId);
     const server = await prisma.serverConfiguration.findFirst({
-      where: { id: serverId, userId },
+      where: { id: serverId, userId: { in: orgUserIds } },
     });
 
     if (!server) {
@@ -274,7 +321,7 @@ export async function toolRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Get agent tool permissions
+  // Get agent tool permissions (org visible)
   fastify.get('/agents/:agentId/permissions', {
     schema: {
       tags: ['Tools'],
@@ -283,17 +330,13 @@ export async function toolRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { organizationId } = getTenantContext(request.user);
     const { agentId } = request.params as { agentId: string };
 
-    // Get user's servers
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Get org's server IDs
+    const serverIds = await getOrganizationServerIds(organizationId);
 
-    // Verify agent belongs to user
+    // Verify agent belongs to organization
     const agent = await prisma.agent.findFirst({
       where: { id: agentId, serverId: { in: serverIds } },
     });
@@ -326,27 +369,27 @@ export async function toolRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Update agent tool permission
+  // Update agent tool permission (server owner only)
   fastify.put('/agents/:agentId/permissions/:toolId', {
     schema: {
       tags: ['Tools'],
-      description: 'Update tool permission for an agent',
+      description: 'Update tool permission for an agent (server owner only)',
       security: [{ bearerAuth: [] }],
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { agentId, toolId } = request.params as { agentId: string; toolId: string };
     const body = updatePermissionSchema.parse(request.body);
 
-    // Get user's servers
+    // Get user's servers (only owner can modify permissions)
     const servers = await prisma.serverConfiguration.findMany({
       where: { userId },
       select: { id: true },
     });
     const serverIds = servers.map((s) => s.id);
 
-    // Verify agent belongs to user
+    // Verify agent belongs to one of user's servers
     const agent = await prisma.agent.findFirst({
       where: { id: agentId, serverId: { in: serverIds } },
     });

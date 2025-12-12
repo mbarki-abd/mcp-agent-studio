@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../index.js';
+import { getTenantContext, getOrganizationServerIds } from '../utils/tenant.js';
 
 const createSessionSchema = z.object({
   agentId: z.string().uuid(),
@@ -12,7 +13,7 @@ const sendMessageSchema = z.object({
 });
 
 export async function chatRoutes(fastify: FastifyInstance) {
-  // Create or get chat session
+  // Create or get chat session (org visible for agents)
   fastify.post('/sessions', {
     schema: {
       tags: ['Chat'],
@@ -21,15 +22,11 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId, organizationId } = getTenantContext(request.user);
     const body = createSessionSchema.parse(request.body);
 
-    // Verify agent exists and user has access
-    const servers = await prisma.serverConfiguration.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-    const serverIds = servers.map((s) => s.id);
+    // Verify agent exists and belongs to organization
+    const serverIds = await getOrganizationServerIds(organizationId);
 
     const agent = await prisma.agent.findFirst({
       where: { id: body.agentId, serverId: { in: serverIds } },
@@ -62,7 +59,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // List chat sessions
+  // List chat sessions (user's own sessions only)
   fastify.get('/sessions', {
     schema: {
       tags: ['Chat'],
@@ -71,7 +68,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { agentId } = request.query as { agentId?: string };
 
     const where: { userId: string; agentId?: string } = { userId };
@@ -104,7 +101,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Get session messages
+  // Get session messages (owner only)
   fastify.get('/sessions/:sessionId/messages', {
     schema: {
       tags: ['Chat'],
@@ -113,7 +110,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { sessionId } = request.params as { sessionId: string };
 
     const session = await prisma.chatSession.findFirst({
@@ -141,7 +138,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Send message to agent
+  // Send message to agent (owner only)
   fastify.post('/sessions/:sessionId/messages', {
     schema: {
       tags: ['Chat'],
@@ -150,7 +147,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { sessionId } = request.params as { sessionId: string };
     const body = sendMessageSchema.parse(request.body);
 
@@ -215,7 +212,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Streaming endpoint for real-time chat
+  // Streaming endpoint for real-time chat (owner only)
   fastify.post('/sessions/:sessionId/stream', {
     schema: {
       tags: ['Chat'],
@@ -224,7 +221,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { sessionId } = request.params as { sessionId: string };
     const body = sendMessageSchema.parse(request.body);
 
@@ -307,7 +304,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Clear session history
+  // Clear session history (owner only)
   fastify.delete('/sessions/:sessionId', {
     schema: {
       tags: ['Chat'],
@@ -316,7 +313,7 @@ export async function chatRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const { userId } = request.user as { userId: string };
+    const { userId } = getTenantContext(request.user);
     const { sessionId } = request.params as { sessionId: string };
 
     const session = await prisma.chatSession.findFirst({

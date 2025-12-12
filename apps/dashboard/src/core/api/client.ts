@@ -1,3 +1,9 @@
+/**
+ * API Client
+ *
+ * Handles all HTTP requests to the backend API.
+ * Uses httpOnly cookies for authentication (more secure than localStorage).
+ */
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -11,18 +17,9 @@ interface RequestOptions {
 
 class ApiClient {
   private baseUrl: string;
-  private token: string | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-  }
-
-  setToken(token: string | null) {
-    this.token = token;
-  }
-
-  getToken(): string | null {
-    return this.token;
   }
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -33,15 +30,12 @@ class ApiClient {
       ...headers,
     };
 
-    if (this.token) {
-      requestHeaders['Authorization'] = `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method,
       headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
       signal,
+      credentials: 'include', // Send cookies with every request
     });
 
     // Handle 401 - Unauthorized
@@ -50,16 +44,16 @@ class ApiClient {
       if (endpoint === '/auth/me' || endpoint === '/auth/refresh') {
         throw new AuthError('Not authenticated');
       }
-      // Try to refresh token
+      // Try to refresh token (uses httpOnly cookie automatically)
       const refreshed = await this.refreshToken();
       if (refreshed) {
-        // Retry request with new token
-        requestHeaders['Authorization'] = `Bearer ${this.token}`;
+        // Retry request (new cookies are set automatically)
         const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
           method,
           headers: requestHeaders,
           body: body ? JSON.stringify(body) : undefined,
           signal,
+          credentials: 'include',
         });
         return this.parseResponse<T>(retryResponse);
       }
@@ -85,25 +79,15 @@ class ApiClient {
   }
 
   private async refreshToken(): Promise<boolean> {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return false;
-
     try {
+      // Refresh token is sent via httpOnly cookie automatically
       const response = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
       });
 
-      if (!response.ok) return false;
-
-      const data = await response.json();
-      this.token = data.token;
-      localStorage.setItem('token', data.token);
-      if (data.refreshToken) {
-        localStorage.setItem('refreshToken', data.refreshToken);
-      }
-      return true;
+      return response.ok;
     } catch {
       return false;
     }
@@ -153,9 +137,3 @@ export class AuthError extends Error {
 
 // Singleton instance
 export const apiClient = new ApiClient(API_URL);
-
-// Initialize token from localStorage
-const storedToken = localStorage.getItem('token');
-if (storedToken) {
-  apiClient.setToken(storedToken);
-}

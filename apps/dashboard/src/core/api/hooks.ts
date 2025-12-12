@@ -27,6 +27,8 @@ export const queryKeys = {
     list: (params?: object) => ['agents', 'list', params] as const,
     detail: (id: string) => ['agents', 'detail', id] as const,
     byServer: (serverId: string) => ['agents', 'server', serverId] as const,
+    hierarchy: (serverId?: string) => ['agents', 'hierarchy', serverId] as const,
+    stats: (agentId: string) => ['agents', agentId, 'stats'] as const,
   },
   tasks: {
     all: ['tasks'] as const,
@@ -52,6 +54,25 @@ export const queryKeys = {
     adminActions: (hours?: number) => ['audit', 'admin-actions', hours] as const,
     user: (userId: string) => ['audit', 'user', userId] as const,
     resource: (resource: string, resourceId: string) => ['audit', 'resource', resource, resourceId] as const,
+  },
+  dashboard: {
+    stats: ['dashboard', 'stats'] as const,
+    activity: (limit?: number) => ['dashboard', 'activity', limit] as const,
+    health: ['dashboard', 'health'] as const,
+  },
+  organization: {
+    current: ['organization'] as const,
+    members: ['organization', 'members'] as const,
+    invitations: ['organization', 'invitations'] as const,
+    usage: ['organization', 'usage'] as const,
+    plans: ['organization', 'plans'] as const,
+  },
+  apiKeys: {
+    all: ['apiKeys'] as const,
+    list: ['apiKeys', 'list'] as const,
+    detail: (keyId: string) => ['apiKeys', 'detail', keyId] as const,
+    usage: (keyId: string) => ['apiKeys', keyId, 'usage'] as const,
+    orgAll: ['apiKeys', 'org'] as const,
   },
 };
 
@@ -705,5 +726,386 @@ export function useCleanupAuditLogs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
     },
+  });
+}
+
+// =====================================================
+// Dashboard Hooks
+// =====================================================
+
+export interface DashboardStats {
+  servers: { total: number; online: number; offline: number };
+  agents: { total: number; active: number; idle: number; error: number };
+  tasks: { total: number; pending: number; running: number; completed: number; failed: number };
+  executions: { today: number; thisWeek: number; avgDuration: number };
+}
+
+export interface DashboardActivity {
+  id: string;
+  type: 'task_completed' | 'task_failed' | 'agent_created' | 'server_connected' | 'server_error';
+  message: string;
+  resourceId?: string;
+  resourceType?: string;
+  timestamp: string;
+}
+
+export interface DashboardHealth {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  database: { status: string; latency: number };
+  redis?: { status: string; latency: number };
+  servers: { healthy: number; unhealthy: number };
+}
+
+export function useDashboardStats() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.stats,
+    queryFn: () => apiClient.get<DashboardStats>('/dashboard/stats'),
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Auto-refresh every minute
+  });
+}
+
+export function useDashboardActivity(limit: number = 20) {
+  return useQuery({
+    queryKey: queryKeys.dashboard.activity(limit),
+    queryFn: () => apiClient.get<{ activities: DashboardActivity[] }>(`/dashboard/activity?limit=${limit}`),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardHealth() {
+  return useQuery({
+    queryKey: queryKeys.dashboard.health,
+    queryFn: () => apiClient.get<DashboardHealth>('/dashboard/health'),
+    staleTime: 15 * 1000, // 15 seconds
+    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
+  });
+}
+
+// =====================================================
+// Organization Hooks
+// =====================================================
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo?: string;
+  description?: string;
+  settings: Record<string, unknown>;
+  plan: 'free' | 'pro' | 'enterprise';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationMember {
+  id: string;
+  userId: string;
+  email: string;
+  name?: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER';
+  joinedAt: string;
+}
+
+export interface OrganizationInvitation {
+  id: string;
+  email: string;
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  expiresAt: string;
+  createdAt: string;
+  invitedBy: string;
+}
+
+export interface OrganizationUsage {
+  servers: { used: number; limit: number };
+  agents: { used: number; limit: number };
+  tasks: { used: number; limit: number };
+  apiCalls: { used: number; limit: number };
+  storage: { used: number; limit: number };
+}
+
+export interface OrganizationPlan {
+  id: string;
+  name: string;
+  price: number;
+  features: string[];
+  limits: {
+    servers: number;
+    agents: number;
+    tasks: number;
+    apiCalls: number;
+    storage: number;
+  };
+}
+
+export function useOrganization() {
+  return useQuery({
+    queryKey: queryKeys.organization.current,
+    queryFn: () => apiClient.get<Organization>('/organization'),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<Organization>) =>
+      apiClient.patch<Organization>('/organization', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organization.current });
+    },
+  });
+}
+
+export function useOrganizationMembers() {
+  return useQuery({
+    queryKey: queryKeys.organization.members,
+    queryFn: () => apiClient.get<{ members: OrganizationMember[] }>('/organization/members'),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useUpdateMemberRole() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, role }: { memberId: string; role: OrganizationMember['role'] }) =>
+      apiClient.patch(`/organization/members/${memberId}/role`, { role }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organization.members });
+    },
+  });
+}
+
+export function useRemoveMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      apiClient.delete(`/organization/members/${memberId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organization.members });
+    },
+  });
+}
+
+export function useOrganizationInvitations() {
+  return useQuery({
+    queryKey: queryKeys.organization.invitations,
+    queryFn: () => apiClient.get<{ invitations: OrganizationInvitation[] }>('/organization/invitations'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useInviteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { email: string; role: OrganizationInvitation['role'] }) =>
+      apiClient.post<OrganizationInvitation>('/organization/invitations', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organization.invitations });
+    },
+  });
+}
+
+export function useCancelInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      apiClient.delete(`/organization/invitations/${invitationId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.organization.invitations });
+    },
+  });
+}
+
+export function useOrganizationUsage() {
+  return useQuery({
+    queryKey: queryKeys.organization.usage,
+    queryFn: () => apiClient.get<OrganizationUsage>('/organization/usage'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useOrganizationPlans() {
+  return useQuery({
+    queryKey: queryKeys.organization.plans,
+    queryFn: () => apiClient.get<{ plans: OrganizationPlan[] }>('/organization/plans'),
+    staleTime: 10 * 60 * 1000, // 10 minutes - plans don't change often
+  });
+}
+
+// =====================================================
+// API Keys Hooks
+// =====================================================
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string; // First 8 chars for display
+  scopes: string[];
+  expiresAt?: string;
+  lastUsedAt?: string;
+  createdAt: string;
+  createdBy: string;
+  status: 'active' | 'revoked' | 'expired';
+}
+
+export interface ApiKeyWithSecret extends ApiKey {
+  key: string; // Full key, only shown once at creation
+}
+
+export interface ApiKeyUsage {
+  keyId: string;
+  totalCalls: number;
+  callsToday: number;
+  callsThisWeek: number;
+  callsThisMonth: number;
+  lastEndpoints: Array<{
+    endpoint: string;
+    method: string;
+    timestamp: string;
+    status: number;
+  }>;
+}
+
+export function useApiKeys() {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.list,
+    queryFn: () => apiClient.get<{ keys: ApiKey[] }>('/keys'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; scopes: string[]; expiresAt?: string }) =>
+      apiClient.post<ApiKeyWithSecret>('/keys', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+export function useApiKey(keyId: string) {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.detail(keyId),
+    queryFn: () => apiClient.get<ApiKey>(`/keys/${keyId}`),
+    enabled: !!keyId,
+  });
+}
+
+export function useUpdateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keyId, data }: { keyId: string; data: { name?: string; scopes?: string[] } }) =>
+      apiClient.patch<ApiKey>(`/keys/${keyId}`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.detail(variables.keyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) =>
+      apiClient.delete(`/keys/${keyId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+export function useRegenerateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) =>
+      apiClient.post<ApiKeyWithSecret>(`/keys/${keyId}/regenerate`, {}),
+    onSuccess: (_, keyId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.detail(keyId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+export function useApiKeyUsage(keyId: string) {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.usage(keyId),
+    queryFn: () => apiClient.get<ApiKeyUsage>(`/keys/${keyId}/usage`),
+    enabled: !!keyId,
+    staleTime: 30 * 1000,
+  });
+}
+
+// Org-level API keys (admin only)
+export function useOrgApiKeys() {
+  return useQuery({
+    queryKey: queryKeys.apiKeys.orgAll,
+    queryFn: () => apiClient.get<{ keys: ApiKey[] }>('/keys/org/all'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useRevokeOrgApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) =>
+      apiClient.delete(`/keys/org/${keyId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.orgAll });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+    },
+  });
+}
+
+// =====================================================
+// Auth Complementary Hooks
+// =====================================================
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (email: string) =>
+      apiClient.post<{ message: string }>('/auth/forgot-password', { email }),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: ({ token, password }: { token: string; password: string }) =>
+      apiClient.post<{ message: string }>('/auth/reset-password', { token, password }),
+  });
+}
+
+export function useSendVerification() {
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post<{ message: string }>('/auth/send-verification', {}),
+  });
+}
+
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) =>
+      apiClient.post<{ message: string }>('/auth/verify-email', { token }),
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name?: string; email?: string }) =>
+      apiClient.patch<User>('/auth/profile', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.me });
+    },
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      apiClient.post<{ message: string }>('/auth/change-password', { currentPassword, newPassword }),
   });
 }

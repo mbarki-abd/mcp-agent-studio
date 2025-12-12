@@ -1,3 +1,9 @@
+/**
+ * Authentication Provider
+ *
+ * Manages user authentication state using httpOnly cookies.
+ * Cookies are automatically handled by the browser - no localStorage needed.
+ */
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, queryKeys } from '../api';
@@ -33,19 +39,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     ability: createDefaultAbility(),
   });
 
-  // Load user on mount
+  // Load user on mount - cookies are sent automatically
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      apiClient.setToken(token);
-      loadUser();
-    } else {
-      setState(prev => ({ ...prev, isLoading: false }));
-    }
+    loadUser();
   }, []);
 
   const loadUser = useCallback(async () => {
     try {
+      // Try to fetch user - cookies are sent automatically via credentials: 'include'
       const user = await apiClient.get<User>('/auth/me');
       const ability = defineAbilitiesFor(user.role as Role);
       setState({
@@ -54,11 +55,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isLoading: false,
         ability,
       });
-    } catch (error) {
-      // Token is invalid, clear it
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      apiClient.setToken(null);
+    } catch {
+      // No valid session (cookies missing or expired)
       setState({
         user: null,
         isAuthenticated: false,
@@ -71,16 +69,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = useCallback(async (email: string, password: string) => {
     interface LoginResponse {
       user: User;
-      token: string;
-      refreshToken: string;
     }
 
+    // Login - server sets httpOnly cookies automatically
     const response = await apiClient.post<LoginResponse>('/auth/login', { email, password });
-
-    // Store tokens
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('refreshToken', response.refreshToken);
-    apiClient.setToken(response.token);
 
     // Update state
     const ability = defineAbilitiesFor(response.user.role as Role);
@@ -100,21 +92,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   ) => {
     interface RegisterResponse {
       user: User;
-      token: string;
-      refreshToken: string;
     }
 
+    // Register - server sets httpOnly cookies automatically
     const response = await apiClient.post<RegisterResponse>('/auth/register', {
       email,
       password,
       name,
       organizationName,
     });
-
-    // Store tokens
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('refreshToken', response.refreshToken);
-    apiClient.setToken(response.token);
 
     // Update state
     const ability = defineAbilitiesFor(response.user.role as Role);
@@ -128,15 +114,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     try {
+      // Logout - server clears httpOnly cookies
       await apiClient.post('/auth/logout');
     } catch {
       // Ignore errors during logout
     }
-
-    // Clear storage
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    apiClient.setToken(null);
 
     // Clear all queries
     queryClient.clear();

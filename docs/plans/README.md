@@ -19,6 +19,7 @@ Documentation des plans d'implémentation pour MCP Agent Studio.
 
 | ID | Titre | Priorité | Dépend de |
 |----|-------|----------|-----------|
+| [PLAN-007](./backlog/PLAN-007-frontend-completion.md) | Frontend Completion - Modules Manquants | P1 | - |
 | PLAN-006 | Multi-Organization & Billing | P2 | PLAN-005 |
 
 ### Completed (Terminés)

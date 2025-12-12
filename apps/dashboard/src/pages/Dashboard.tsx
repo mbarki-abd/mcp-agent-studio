@@ -1,6 +1,12 @@
-import { Bot, Server, ListTodo, Activity } from 'lucide-react';
+import { Bot, Server, ListTodo, Activity, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useDashboardStats, useDashboardActivity, type DashboardActivity } from '../core/api/hooks';
 
 export function DashboardHome() {
+  const navigate = useNavigate();
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: activityData, isLoading: activityLoading } = useDashboardActivity(10);
+
   return (
     <div className="space-y-6">
       <div>
@@ -14,27 +20,31 @@ export function DashboardHome() {
       <div className="grid grid-cols-4 gap-6">
         <StatCard
           title="Servers"
-          value="0"
-          description="Connected servers"
+          value={statsLoading ? '-' : String(stats?.servers?.total ?? 0)}
+          description={statsLoading ? 'Loading...' : `${stats?.servers?.online ?? 0} online`}
           icon={Server}
+          loading={statsLoading}
         />
         <StatCard
           title="Agents"
-          value="0"
-          description="Active agents"
+          value={statsLoading ? '-' : String(stats?.agents?.total ?? 0)}
+          description={statsLoading ? 'Loading...' : `${stats?.agents?.active ?? 0} active`}
           icon={Bot}
+          loading={statsLoading}
         />
         <StatCard
           title="Tasks"
-          value="0"
-          description="Tasks today"
+          value={statsLoading ? '-' : String(stats?.tasks?.total ?? 0)}
+          description={statsLoading ? 'Loading...' : `${stats?.tasks?.running ?? 0} running`}
           icon={ListTodo}
+          loading={statsLoading}
         />
         <StatCard
           title="Executions"
-          value="0"
-          description="Running now"
+          value={statsLoading ? '-' : String(stats?.executions?.today ?? 0)}
+          description={statsLoading ? 'Loading...' : 'Today'}
           icon={Activity}
+          loading={statsLoading}
         />
       </div>
 
@@ -43,13 +53,22 @@ export function DashboardHome() {
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="space-y-2">
-            <button className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
+            <button
+              onClick={() => navigate('/servers')}
+              className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+            >
               Add Server Configuration
             </button>
-            <button className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
+            <button
+              onClick={() => navigate('/agents')}
+              className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+            >
               Create New Agent
             </button>
-            <button className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors">
+            <button
+              onClick={() => navigate('/tasks')}
+              className="w-full text-left px-4 py-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors"
+            >
               Create New Task
             </button>
           </div>
@@ -57,11 +76,51 @@ export function DashboardHome() {
 
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Recent Activity</h2>
-          <div className="text-center text-muted-foreground py-8">
-            No recent activity
-          </div>
+          {activityLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : activityData?.activities && activityData.activities.length > 0 ? (
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {activityData.activities.map((activity) => (
+                <ActivityItem key={activity.id} activity={activity} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              No recent activity
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Extra Stats Row */}
+      {stats && (
+        <div className="grid grid-cols-4 gap-6">
+          <MiniStatCard
+            title="Pending Tasks"
+            value={stats.tasks?.pending ?? 0}
+            icon={Clock}
+          />
+          <MiniStatCard
+            title="Completed Tasks"
+            value={stats.tasks?.completed ?? 0}
+            icon={CheckCircle}
+            variant="success"
+          />
+          <MiniStatCard
+            title="Failed Tasks"
+            value={stats.tasks?.failed ?? 0}
+            icon={XCircle}
+            variant="error"
+          />
+          <MiniStatCard
+            title="Weekly Executions"
+            value={stats.executions?.thisWeek ?? 0}
+            icon={Activity}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -73,23 +132,96 @@ function StatCard({
   value,
   description,
   icon: Icon,
+  loading = false,
 }: {
   title: string;
   value: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
+  loading?: boolean;
 }) {
   return (
     <div className="bg-card border border-border rounded-lg p-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="text-3xl font-bold mt-1">{value}</p>
+          <p className="text-3xl font-bold mt-1">
+            {loading ? (
+              <span className="inline-block w-8 h-8 bg-muted animate-pulse rounded" />
+            ) : (
+              value
+            )}
+          </p>
           <p className="text-xs text-muted-foreground mt-1">{description}</p>
         </div>
         <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
           <Icon className="w-6 h-6 text-primary" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniStatCard({
+  title,
+  value,
+  icon: Icon,
+  variant = 'default',
+}: {
+  title: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string }>;
+  variant?: 'default' | 'success' | 'error';
+}) {
+  const variantStyles = {
+    default: 'bg-primary/10 text-primary',
+    success: 'bg-green-500/10 text-green-500',
+    error: 'bg-red-500/10 text-red-500',
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${variantStyles[variant]}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div>
+          <p className="text-2xl font-bold">{value}</p>
+          <p className="text-xs text-muted-foreground">{title}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityItem({ activity }: { activity: DashboardActivity }) {
+  const iconMap: Record<DashboardActivity['type'], React.ComponentType<{ className?: string }>> = {
+    task_completed: CheckCircle,
+    task_failed: XCircle,
+    agent_created: Bot,
+    server_connected: Server,
+    server_error: Server,
+  };
+
+  const colorMap: Record<DashboardActivity['type'], string> = {
+    task_completed: 'text-green-500',
+    task_failed: 'text-red-500',
+    agent_created: 'text-blue-500',
+    server_connected: 'text-green-500',
+    server_error: 'text-red-500',
+  };
+
+  const Icon = iconMap[activity.type] || Activity;
+  const color = colorMap[activity.type] || 'text-muted-foreground';
+
+  return (
+    <div className="flex items-start gap-3 text-sm">
+      <Icon className={`w-4 h-4 mt-0.5 ${color}`} />
+      <div className="flex-1 min-w-0">
+        <p className="truncate">{activity.message}</p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(activity.timestamp).toLocaleString()}
+        </p>
       </div>
     </div>
   );

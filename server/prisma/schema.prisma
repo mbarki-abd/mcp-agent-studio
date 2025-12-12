@@ -19,6 +19,8 @@ model User {
   passwordHash   String
   name           String
   role           Role     @default(USER)
+  emailVerified  Boolean  @default(false)
+  emailVerifiedAt DateTime?
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -43,17 +45,53 @@ enum Role {
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
-  slug      String   @unique
-  plan      Plan     @default(FREE)
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  plan        Plan     @default(FREE)
+  description String?
+  logoUrl     String?
+  website     String?
 
-  users     User[]
+  // Settings (stored as JSON)
+  settings    Json     @default("{}")
+
+  // Limits based on plan
+  maxUsers         Int     @default(5)
+  maxServers       Int     @default(2)
+  maxAgents        Int     @default(10)
+  maxTasksPerMonth Int     @default(1000)
+
+  // Billing info
+  billingEmail     String?
+  billingAddress   String?
+
+  users       User[]
+  invitations OrganizationInvitation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
+}
+
+model OrganizationInvitation {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String
+  role           Role     @default(USER)
+  token          String   @unique
+  expiresAt      DateTime
+  invitedById    String
+  acceptedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, email])
+  @@index([token])
+  @@map("organization_invitations")
 }
 
 enum Plan {
@@ -74,6 +112,55 @@ model Session {
   @@index([userId])
   @@index([token])
   @@map("sessions")
+}
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  name           String
+  description    String?
+  keyHash        String    @unique  // SHA256 hash of the key
+  keyPrefix      String              // First 8 chars for display (e.g., "mcp_xxxxx")
+  userId         String
+  organizationId String
+  role           Role      @default(USER)  // API key's permission level
+  scopes         String[]  @default([])     // Optional fine-grained permissions
+  lastUsedAt     DateTime?
+  usageCount     Int       @default(0)
+  rateLimit      Int       @default(1000)  // Requests per hour
+  expiresAt      DateTime?                  // Null = never expires
+  revokedAt      DateTime?                  // Null = not revoked
+  createdAt      DateTime  @default(now())
+
+  @@index([keyHash])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("api_keys")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("email_verification_tokens")
 }
 
 // ==================== SERVER CONFIG ====================
@@ -112,6 +199,8 @@ model ServerConfiguration {
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([status])
+  @@index([createdAt])
   @@map("server_configurations")
 }
 
@@ -164,6 +253,9 @@ model Agent {
   @@unique([serverId, name])
   @@index([serverId])
   @@index([status])
+  @@index([role])
+  @@index([createdAt])
+  @@index([createdById])
   @@map("agents")
 }
 
@@ -245,6 +337,11 @@ model Task {
   @@index([status])
   @@index([agentId])
   @@index([nextRunAt])
+  @@index([priority])
+  @@index([serverId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([executionMode])
   @@map("tasks")
 }
 
@@ -327,6 +424,8 @@ model TaskExecution {
   @@index([taskId])
   @@index([agentId])
   @@index([status])
+  @@index([startedAt])
+  @@index([completedAt])
   @@map("task_executions")
 }
 

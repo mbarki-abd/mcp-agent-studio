@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
@@ -13,13 +14,31 @@ import authPlugin from './middleware/auth.middleware.js';
 import rbacPlugin from './middleware/rbac.middleware.js';
 import errorHandlerPlugin from './middleware/error.middleware.js';
 import loggingPlugin from './middleware/logging.middleware.js';
+import validationPlugin from './middleware/validation.middleware.js';
+import userRateLimitPlugin from './middleware/ratelimit.middleware.js';
+import correlationPlugin from './middleware/correlation.middleware.js';
+import sanitizationPlugin from './middleware/sanitization.middleware.js';
 import { registerAuditMiddleware } from './middleware/audit.middleware.js';
+import { createWebSocketAuthMiddleware, getSocketUser, isAuthenticated } from './middleware/websocket-auth.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
+import { healthService } from './services/health.service.js';
 import { metrics } from './utils/metrics.js';
 import { circuitBreakers } from './utils/circuit-breaker.js';
 
 // Environment configuration with validation
 const isProduction = process.env.NODE_ENV === 'production';
+
+function getCookieSecret(): string {
+  const secret = process.env.COOKIE_SECRET;
+  if (!secret && isProduction) {
+    throw new Error('COOKIE_SECRET environment variable is required in production');
+  }
+  if (!secret) {
+    console.warn('⚠️  WARNING: Using default cookie secret. Set COOKIE_SECRET in production!');
+    return 'dev-cookie-secret-change-in-production-32chars';
+  }
+  return secret;
+}
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -33,7 +52,7 @@ function getJwtSecret(): string {
   return secret;
 }
 
-function getCorsOrigin(): string | string[] {
+function getAllowedOrigins(): string[] {
   const origin = process.env.CORS_ORIGIN;
   if (!origin && isProduction) {
     throw new Error('CORS_ORIGIN environment variable is required in production');
@@ -43,7 +62,13 @@ function getCorsOrigin(): string | string[] {
     return ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'];
   }
   // Support comma-separated origins
-  return origin.includes(',') ? origin.split(',').map(o => o.trim()) : origin;
+  return origin.includes(',') ? origin.split(',').map(o => o.trim()) : [origin];
+}
+
+// Get allowed origins as array for CORS
+function getCorsOrigins(): string[] {
+  const allowedOrigins = getAllowedOrigins();
+  return allowedOrigins;
 }
 
 // Initialize Prisma
@@ -70,10 +95,19 @@ async function registerPlugins() {
   // Request logging (register early for full coverage)
   await fastify.register(loggingPlugin);
 
-  // CORS
+  // Correlation ID tracking (for distributed tracing)
+  await fastify.register(correlationPlugin);
+
+  // CORS - use array of allowed origins for credentials mode
   await fastify.register(cors, {
-    origin: getCorsOrigin(),
+    origin: getCorsOrigins(),
     credentials: true,
+  });
+
+  // Cookie support (before auth)
+  await fastify.register(cookie, {
+    secret: getCookieSecret(),
+    parseOptions: {},
   });
 
   // Security headers
@@ -98,13 +132,27 @@ async function registerPlugins() {
   // RBAC plugin (must be after Auth)
   await fastify.register(rbacPlugin);
 
+  // Validation plugin (centralized Zod validation)
+  await fastify.register(validationPlugin);
+
+  // Input sanitization (XSS, injection protection)
+  await fastify.register(sanitizationPlugin, {
+    escapeHtml: true,
+    detectPatterns: true,
+    logThreats: true,
+    blockThreats: false, // Log only in development, enable in production
+  });
+
+  // User-based rate limiting plugin
+  await fastify.register(userRateLimitPlugin);
+
   // Audit middleware (after auth to capture user info)
   registerAuditMiddleware(fastify);
 
-  // Socket.IO
+  // Socket.IO - use array of origins for socket.io (it handles reflection properly)
   await fastify.register(fastifySocketIO, {
     cors: {
-      origin: getCorsOrigin(),
+      origin: getAllowedOrigins(),
       credentials: true,
     },
   });
@@ -152,34 +200,36 @@ async function registerPlugins() {
 }
 
 // Health check route with detailed status
-fastify.get('/health', async () => {
-  const dbHealthy = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
-  return {
-    status: dbHealthy ? 'healthy' : 'degraded',
-    timestamp: new Date().toISOString(),
-    version: '0.1.0',
-    uptime: process.uptime(),
-    memory: {
-      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-      unit: 'MB',
-    },
-    checks: {
-      database: dbHealthy ? 'up' : 'down',
-    },
-  };
+fastify.get('/health', async (request) => {
+  const detailed = (request.query as { detailed?: string }).detailed === 'true';
+  return healthService.getHealth(detailed);
 });
 
 // Readiness probe (for Kubernetes)
-fastify.get('/ready', async () => {
-  const dbReady = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
+fastify.get('/ready', async (request, reply) => {
+  const result = await healthService.checkReadiness();
 
-  if (!dbReady) {
-    throw { statusCode: 503, message: 'Database not ready' };
+  if (!result.ready) {
+    return reply.status(503).send(result);
   }
 
-  return { status: 'ready' };
+  return result;
+});
+
+// Liveness probe (for Kubernetes)
+fastify.get('/live', async () => {
+  return healthService.checkLiveness();
+});
+
+// Startup probe (for Kubernetes)
+fastify.get('/startup', async (request, reply) => {
+  const result = await healthService.checkStartup();
+
+  if (!result.started) {
+    return reply.status(503).send(result);
+  }
+
+  return result;
 });
 
 // API info route
@@ -239,6 +289,18 @@ async function registerRoutes() {
   // WebSocket routes (monitoring)
   const { websocketRoutes } = await import('./websocket/routes.js');
   await fastify.register(websocketRoutes, { prefix: '/api/monitoring' });
+
+  // Dashboard routes
+  const { dashboardRoutes } = await import('./routes/dashboard.routes.js');
+  await fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
+
+  // Organization routes
+  const { organizationRoutes } = await import('./routes/organization.routes.js');
+  await fastify.register(organizationRoutes, { prefix: '/api/organization' });
+
+  // API Keys routes
+  const { apiKeyRoutes } = await import('./routes/apikeys.routes.js');
+  await fastify.register(apiKeyRoutes, { prefix: '/api/keys' });
 }
 
 // Start server
@@ -272,9 +334,14 @@ async function start() {
     fastify.log.info(`Server running at http://${host}:${port}`);
     fastify.log.info(`API docs at http://${host}:${port}/docs`);
 
-    // Initialize Socket.IO handlers
+    // Initialize Socket.IO with authentication middleware
+    fastify.io.use(createWebSocketAuthMiddleware(fastify));
+
+    // Socket.IO handlers (all connections are authenticated)
     fastify.io.on('connection', (socket) => {
-      fastify.log.info(`Socket connected: ${socket.id}`);
+      // Get authenticated user info
+      const user = isAuthenticated(socket) ? getSocketUser(socket) : null;
+      fastify.log.info(`Socket connected: ${socket.id} (user: ${user?.userId || 'unknown'})`);
 
       socket.on('subscribe:agent', ({ id }) => {
         socket.join(`agent:${id}`);
