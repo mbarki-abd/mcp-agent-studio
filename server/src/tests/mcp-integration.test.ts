@@ -3,6 +3,8 @@
  *
  * These tests validate the MCP client against the sample MCP server.
  * Run the sample server first: cd tools/sample-mcp-server && npm start
+ *
+ * To run these tests: MCP_INTEGRATION=true pnpm test
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -10,8 +12,12 @@ import { MCPClient, getMCPClient, removeMCPClient, clearMCPClients } from '../se
 
 const TEST_SERVER_URL = process.env.MCP_TEST_SERVER || 'http://localhost:3001';
 const TEST_TOKEN = process.env.MCP_TEST_TOKEN || 'sample-token-12345';
+const RUN_INTEGRATION = process.env.MCP_INTEGRATION === 'true';
 
-describe('MCPClient', () => {
+// Skip integration tests unless MCP_INTEGRATION=true
+const describeIntegration = RUN_INTEGRATION ? describe : describe.skip;
+
+describeIntegration('MCPClient', () => {
   let client: MCPClient;
 
   beforeAll(() => {

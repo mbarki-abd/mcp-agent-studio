@@ -15,7 +15,10 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -45,6 +48,7 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.0",
     "@types/bcryptjs": "^2.4.0",
     "@types/node": "^20.10.0",
     "@types/ws": "^8.18.1",
