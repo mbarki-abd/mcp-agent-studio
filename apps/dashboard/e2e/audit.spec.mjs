@@ -88,13 +88,13 @@ test.describe('Audit Module', () => {
     // Wait for data to load
     await page.waitForTimeout(1000);
 
-    // Check table headers
-    await expect(page.locator('th:has-text("Time")')).toBeVisible();
-    await expect(page.locator('th:has-text("Action")')).toBeVisible();
-    await expect(page.locator('th:has-text("Resource")')).toBeVisible();
-    await expect(page.locator('th:has-text("User")')).toBeVisible();
-    await expect(page.locator('th:has-text("Status")')).toBeVisible();
-    await expect(page.locator('th:has-text("Duration")')).toBeVisible();
+    // Check table headers (use exact matching to avoid ambiguity)
+    await expect(page.getByRole('columnheader', { name: 'Time' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Action', exact: true })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Resource' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'User' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Duration' })).toBeVisible();
   });
 
   test('should toggle filter visibility', async ({ page }) => {
@@ -167,11 +167,12 @@ test.describe('Audit Module', () => {
     // Check modal is visible
     await expect(page.locator('h2:has-text("Audit Log Details")')).toBeVisible();
 
-    // Check modal fields
-    await expect(page.locator('text=Timestamp')).toBeVisible();
-    await expect(page.locator('text=Action')).toBeVisible();
-    await expect(page.locator('text=Status')).toBeVisible();
-    await expect(page.locator('text=Resource')).toBeVisible();
+    // Check modal fields (use more specific selectors within the modal)
+    const modal = page.locator('.fixed');
+    await expect(modal.locator('label:has-text("Timestamp")')).toBeVisible();
+    await expect(modal.locator('label:has-text("Action")')).toBeVisible();
+    await expect(modal.locator('label:has-text("Status")')).toBeVisible();
+    await expect(modal.locator('label:has-text("Resource"):not(:has-text("Resource ID"))')).toBeVisible();
   });
 
   test('should close detail modal', async ({ page }) => {
