@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../index.js';
+import { auditLogin, auditLogout } from '../middleware/audit.middleware.js';
 
 // Validation schemas
 const registerSchema = z.object({
@@ -132,6 +133,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
 
     if (!user) {
+      // Log failed login attempt (user not found)
+      await auditLogin(request, false, undefined, body.email, 'User not found');
       return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
@@ -139,6 +142,8 @@ export async function authRoutes(fastify: FastifyInstance) {
     const validPassword = await bcrypt.compare(body.password, user.passwordHash);
 
     if (!validPassword) {
+      // Log failed login attempt (wrong password)
+      await auditLogin(request, false, user.id, user.email, 'Invalid password');
       return reply.status(401).send({ error: 'Invalid credentials' });
     }
 
@@ -170,6 +175,9 @@ export async function authRoutes(fastify: FastifyInstance) {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
+
+    // Log successful login
+    await auditLogin(request, true, user.id, user.email);
 
     return {
       user: {
@@ -227,12 +235,16 @@ export async function authRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const token = request.headers.authorization?.replace('Bearer ', '');
+    const decoded = request.user as { userId: string; email: string };
 
     if (token) {
       await prisma.session.deleteMany({
         where: { token },
       });
     }
+
+    // Log logout
+    await auditLogout(request, decoded.userId, decoded.email);
 
     return { message: 'Logged out successfully' };
   });

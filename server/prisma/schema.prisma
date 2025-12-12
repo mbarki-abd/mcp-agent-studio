@@ -484,3 +484,90 @@ enum MessageRole {
   assistant
   system
 }
+
+// ==================== AUDIT LOGGING ====================
+
+model AuditLog {
+  id          String      @id @default(uuid())
+
+  // Who
+  userId      String?
+  userEmail   String?
+  ipAddress   String?
+  userAgent   String?
+
+  // What
+  action      AuditAction
+  resource    String      // e.g., "server", "agent", "task"
+  resourceId  String?
+  method      String?     // HTTP method
+  path        String?     // Request path
+
+  // Details
+  status      AuditStatus @default(SUCCESS)
+  statusCode  Int?
+  oldValue    Json?       // Previous state (for updates)
+  newValue    Json?       // New state (for creates/updates)
+  metadata    Json?       // Additional context
+  errorMessage String?
+
+  // When
+  duration    Int?        // Request duration in ms
+  timestamp   DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([resourceId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  // Auth
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  TOKEN_REFRESH
+
+  // CRUD
+  CREATE
+  READ
+  UPDATE
+  DELETE
+
+  // Server operations
+  SERVER_CONNECT
+  SERVER_DISCONNECT
+  HEALTH_CHECK
+
+  // Agent operations
+  AGENT_VALIDATE
+  AGENT_EXECUTE
+  AGENT_ASSIGN
+
+  // Task operations
+  TASK_QUEUE
+  TASK_START
+  TASK_COMPLETE
+  TASK_FAIL
+  TASK_CANCEL
+
+  // Tool operations
+  TOOL_INSTALL
+  TOOL_UNINSTALL
+  TOOL_PERMISSION_GRANT
+  TOOL_PERMISSION_REVOKE
+
+  // Admin
+  ADMIN_ACTION
+  CONFIG_CHANGE
+  EXPORT_DATA
+}
+
+enum AuditStatus {
+  SUCCESS
+  FAILURE
+  PARTIAL
+}

@@ -13,6 +13,7 @@ import authPlugin from './middleware/auth.middleware.js';
 import rbacPlugin from './middleware/rbac.middleware.js';
 import errorHandlerPlugin from './middleware/error.middleware.js';
 import loggingPlugin from './middleware/logging.middleware.js';
+import { registerAuditMiddleware } from './middleware/audit.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
 import { metrics } from './utils/metrics.js';
 import { circuitBreakers } from './utils/circuit-breaker.js';
@@ -96,6 +97,9 @@ async function registerPlugins() {
 
   // RBAC plugin (must be after Auth)
   await fastify.register(rbacPlugin);
+
+  // Audit middleware (after auth to capture user info)
+  registerAuditMiddleware(fastify);
 
   // Socket.IO
   await fastify.register(fastifySocketIO, {
