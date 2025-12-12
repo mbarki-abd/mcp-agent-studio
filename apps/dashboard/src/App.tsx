@@ -21,6 +21,7 @@ import { chatModule } from './modules/chat';
 import { auditModule } from './modules/audit';
 import { organizationModule } from './modules/organization';
 import { apiKeysModule } from './modules/apikeys';
+import { analyticsModule } from './modules/analytics';
 
 // Register modules (order matters for dependencies)
 moduleRegistry.register(serversModule);
@@ -32,6 +33,7 @@ moduleRegistry.register(chatModule);
 moduleRegistry.register(auditModule);
 moduleRegistry.register(organizationModule);
 moduleRegistry.register(apiKeysModule);
+moduleRegistry.register(analyticsModule);
 
 // Public routes that don't require authentication
 const PUBLIC_ROUTES = ['/login', '/forgot-password', '/reset-password', '/verify-email'];

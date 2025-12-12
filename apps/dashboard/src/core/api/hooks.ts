@@ -1582,3 +1582,266 @@ export function useChangePassword() {
       apiClient.post<{ message: string }>('/auth/change-password', { currentPassword, newPassword }),
   });
 }
+
+// =====================================================
+// Billing Hooks
+// =====================================================
+
+export const queryKeysBilling = {
+  info: ['billing', 'info'] as const,
+  plans: ['billing', 'plans'] as const,
+  usage: ['billing', 'usage'] as const,
+  quota: (resource: string) => ['billing', 'quota', resource] as const,
+};
+
+export type Plan = 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE';
+
+export interface PlanConfig {
+  id: Plan;
+  name: string;
+  priceMonthly: number;
+  priceYearly: number;
+  limits: {
+    maxUsers: number;
+    maxServers: number;
+    maxAgents: number;
+    maxTasksPerMonth: number;
+  };
+  features: string[];
+}
+
+export interface BillingInfo {
+  organizationId: string;
+  plan: Plan;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  billingCycle: 'monthly' | 'yearly';
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd: boolean;
+  planDetails: {
+    name: string;
+    priceMonthly: number;
+    priceYearly: number;
+    features: string[];
+    limits: PlanConfig['limits'];
+  };
+}
+
+export interface UsageReport {
+  organizationId: string;
+  period: { start: string; end: string };
+  usage: {
+    users: { current: number; limit: number; percentage: number };
+    servers: { current: number; limit: number; percentage: number };
+    agents: { current: number; limit: number; percentage: number };
+    tasks: { current: number; limit: number; percentage: number };
+  };
+  overage: boolean;
+  overageDetails: string[];
+}
+
+export interface QuotaCheck {
+  allowed: boolean;
+  current: number;
+  limit: number;
+  message?: string;
+}
+
+export interface PlanChangePreview {
+  currentPlan: Plan;
+  newPlan: Plan;
+  proratedAmount: number;
+  newMonthlyAmount: number;
+  effectiveDate: string;
+}
+
+export function useBillingInfo() {
+  return useQuery({
+    queryKey: queryKeysBilling.info,
+    queryFn: () => apiClient.get<BillingInfo>('/billing'),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useBillingPlans() {
+  return useQuery({
+    queryKey: queryKeysBilling.plans,
+    queryFn: () => apiClient.get<{ currentPlan: Plan; plans: PlanConfig[] }>('/billing/plans'),
+    staleTime: 10 * 60 * 1000, // 10 minutes - plans don't change often
+  });
+}
+
+export function useBillingUsage() {
+  return useQuery({
+    queryKey: queryKeysBilling.usage,
+    queryFn: () => apiClient.get<UsageReport>('/billing/usage'),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useQuotaCheck(resource: 'users' | 'servers' | 'agents' | 'tasks') {
+  return useQuery({
+    queryKey: queryKeysBilling.quota(resource),
+    queryFn: () => apiClient.get<QuotaCheck>(`/billing/quota/${resource}`),
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+export function usePreviewPlanChange() {
+  return useMutation({
+    mutationFn: (plan: Plan) =>
+      apiClient.post<PlanChangePreview>('/billing/preview', { plan }),
+  });
+}
+
+export function useChangePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (plan: Plan) =>
+      apiClient.post<{ success: boolean; message: string }>('/billing/change-plan', { plan }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeysBilling.info });
+      queryClient.invalidateQueries({ queryKey: queryKeysBilling.usage });
+    },
+  });
+}
+
+// =====================================================
+// Analytics Hooks
+// =====================================================
+
+export const queryKeysAnalytics = {
+  overview: (days?: number) => ['analytics', 'overview', days] as const,
+  tasks: (days?: number) => ['analytics', 'tasks', days] as const,
+  agents: (days?: number) => ['analytics', 'agents', days] as const,
+  servers: ['analytics', 'servers'] as const,
+  executions: (days?: number) => ['analytics', 'executions', days] as const,
+};
+
+export interface TimeSeriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface TaskAnalytics {
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  cancelledTasks: number;
+  successRate: number;
+  averageDuration: number;
+  totalTokensUsed: number;
+  tasksByStatus: Record<string, number>;
+  tasksByPriority: Record<string, number>;
+  taskTrend: TimeSeriesPoint[];
+  period?: { start: string; end: string; days: number };
+}
+
+export interface AgentAnalytics {
+  totalAgents: number;
+  activeAgents: number;
+  agentsByRole: Record<string, number>;
+  agentsByStatus: Record<string, number>;
+  topPerformingAgents: Array<{
+    id: string;
+    name: string;
+    displayName: string;
+    completedTasks: number;
+    successRate: number;
+    avgDuration: number;
+  }>;
+  agentActivityTrend: TimeSeriesPoint[];
+  period?: { start: string; end: string; days: number };
+}
+
+export interface ServerAnalytics {
+  totalServers: number;
+  onlineServers: number;
+  serversByStatus: Record<string, number>;
+  serverUptime: Array<{
+    id: string;
+    name: string;
+    uptimePercentage: number;
+    lastCheck: string | null;
+  }>;
+  toolsInstalled: number;
+  toolsByCategory: Record<string, number>;
+}
+
+export interface ExecutionAnalytics {
+  totalExecutions: number;
+  successfulExecutions: number;
+  failedExecutions: number;
+  timeoutExecutions: number;
+  averageDurationMs: number;
+  totalTokensConsumed: number;
+  executionsByDay: TimeSeriesPoint[];
+  executionsByHour: Array<{ hour: number; count: number }>;
+  peakHours: number[];
+  period?: { start: string; end: string; days: number };
+}
+
+export interface AnalyticsOverview {
+  tasks: TaskAnalytics;
+  agents: AgentAnalytics;
+  servers: ServerAnalytics;
+  executions: ExecutionAnalytics;
+  period: { start: string; end: string };
+}
+
+export function useAnalyticsOverview(days: number = 30) {
+  return useQuery({
+    queryKey: queryKeysAnalytics.overview(days),
+    queryFn: () => apiClient.get<AnalyticsOverview>(`/analytics/overview?days=${days}`),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useTaskAnalytics(days: number = 30) {
+  return useQuery({
+    queryKey: queryKeysAnalytics.tasks(days),
+    queryFn: () => apiClient.get<TaskAnalytics>(`/analytics/tasks?days=${days}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAgentAnalytics(days: number = 30) {
+  return useQuery({
+    queryKey: queryKeysAnalytics.agents(days),
+    queryFn: () => apiClient.get<AgentAnalytics>(`/analytics/agents?days=${days}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useServerAnalytics() {
+  return useQuery({
+    queryKey: queryKeysAnalytics.servers,
+    queryFn: () => apiClient.get<ServerAnalytics>('/analytics/servers'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExecutionAnalytics(days: number = 30) {
+  return useQuery({
+    queryKey: queryKeysAnalytics.executions(days),
+    queryFn: () => apiClient.get<ExecutionAnalytics>(`/analytics/executions?days=${days}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExportAnalytics() {
+  return useMutation({
+    mutationFn: ({ days, format }: { days?: number; format?: 'json' }) => {
+      const params = new URLSearchParams();
+      if (days) params.append('days', String(days));
+      if (format) params.append('format', format);
+      return apiClient.get<{
+        exportedAt: string;
+        organizationId: string;
+        period: { start: string; end: string };
+        data: AnalyticsOverview;
+      }>(`/analytics/export?${params.toString()}`);
+    },
+  });
+}

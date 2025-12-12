@@ -305,6 +305,14 @@ async function registerRoutes() {
   // API Keys routes
   const { apiKeyRoutes } = await import('./routes/apikeys.routes.js');
   await fastify.register(apiKeyRoutes, { prefix: '/api/keys' });
+
+  // Billing routes
+  const { billingRoutes } = await import('./routes/billing.routes.js');
+  await fastify.register(billingRoutes, { prefix: '/api/billing' });
+
+  // Analytics routes
+  const { analyticsRoutes } = await import('./routes/analytics.routes.js');
+  await fastify.register(analyticsRoutes, { prefix: '/api/analytics' });
 }
 
 // Start server
