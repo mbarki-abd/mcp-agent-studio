@@ -14,6 +14,7 @@ import { tasksModule } from './modules/tasks';
 import { monitoringModule } from './modules/monitoring';
 import { toolsModule } from './modules/tools';
 import { chatModule } from './modules/chat';
+import { auditModule } from './modules/audit';
 
 // Register modules (order matters for dependencies)
 moduleRegistry.register(serversModule);
@@ -22,6 +23,7 @@ moduleRegistry.register(tasksModule);
 moduleRegistry.register(monitoringModule);
 moduleRegistry.register(toolsModule);
 moduleRegistry.register(chatModule);
+moduleRegistry.register(auditModule);
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();

@@ -44,6 +44,15 @@ export const queryKeys = {
     server: (serverId: string) => ['tools', 'server', serverId] as const,
     agentPermissions: (agentId: string) => ['tools', 'agent', agentId, 'permissions'] as const,
   },
+  audit: {
+    all: ['audit'] as const,
+    list: (params?: object) => ['audit', 'list', params] as const,
+    stats: (hours?: number) => ['audit', 'stats', hours] as const,
+    failedLogins: (hours?: number) => ['audit', 'failed-logins', hours] as const,
+    adminActions: (hours?: number) => ['audit', 'admin-actions', hours] as const,
+    user: (userId: string) => ['audit', 'user', userId] as const,
+    resource: (resource: string, resourceId: string) => ['audit', 'resource', resource, resourceId] as const,
+  },
 };
 
 // Auth hooks
@@ -565,6 +574,132 @@ export function useClearChatSession() {
       apiClient.delete(`/chat/sessions/${sessionId}`),
     onSuccess: (_, sessionId) => {
       queryClient.invalidateQueries({ queryKey: ['chat', 'messages', sessionId] });
+    },
+  });
+}
+
+// Audit types
+export type AuditAction = 'LOGIN' | 'LOGOUT' | 'CREATE' | 'READ' | 'UPDATE' | 'DELETE' | 'EXECUTE' | 'SYSTEM';
+export type AuditStatus = 'SUCCESS' | 'FAILURE' | 'PENDING';
+
+export interface AuditLogEntry {
+  id: string;
+  action: AuditAction;
+  resource: string;
+  resourceId?: string;
+  userId?: string;
+  userEmail?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+  metadata?: Record<string, unknown>;
+  status: AuditStatus;
+  errorMessage?: string;
+  duration?: number;
+  createdAt: string;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AuditStats {
+  totalLogs: number;
+  byAction: Record<string, number>;
+  byStatus: Record<string, number>;
+  byResource: Record<string, number>;
+  avgDuration?: number;
+}
+
+export interface AuditQueryParams {
+  userId?: string;
+  action?: AuditAction;
+  resource?: string;
+  resourceId?: string;
+  status?: AuditStatus;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// Audit hooks
+export function useAuditLogs(params?: AuditQueryParams) {
+  return useQuery({
+    queryKey: queryKeys.audit.list(params),
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      if (params?.userId) searchParams.set('userId', params.userId);
+      if (params?.action) searchParams.set('action', params.action);
+      if (params?.resource) searchParams.set('resource', params.resource);
+      if (params?.resourceId) searchParams.set('resourceId', params.resourceId);
+      if (params?.status) searchParams.set('status', params.status);
+      if (params?.startDate) searchParams.set('startDate', params.startDate);
+      if (params?.endDate) searchParams.set('endDate', params.endDate);
+      if (params?.limit) searchParams.set('limit', String(params.limit));
+      if (params?.offset) searchParams.set('offset', String(params.offset));
+      const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+      return apiClient.get<AuditLogsResponse>(`/audit${query}`);
+    },
+    staleTime: 30 * 1000, // 30 seconds - audit logs can change frequently
+  });
+}
+
+export function useAuditStats(hours: number = 24) {
+  return useQuery({
+    queryKey: queryKeys.audit.stats(hours),
+    queryFn: () => apiClient.get<AuditStats>(`/audit/stats?hours=${hours}`),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useFailedLogins(hours: number = 24, limit: number = 100) {
+  return useQuery({
+    queryKey: queryKeys.audit.failedLogins(hours),
+    queryFn: () => apiClient.get<AuditLogEntry[]>(`/audit/failed-logins?hours=${hours}&limit=${limit}`),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAdminActions(hours: number = 24) {
+  return useQuery({
+    queryKey: queryKeys.audit.adminActions(hours),
+    queryFn: () => apiClient.get<AuditLogEntry[]>(`/audit/admin-actions?hours=${hours}`),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUserActivity(userId: string, limit: number = 50) {
+  return useQuery({
+    queryKey: queryKeys.audit.user(userId),
+    queryFn: () => apiClient.get<AuditLogEntry[]>(`/audit/user/${userId}?limit=${limit}`),
+    enabled: !!userId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useResourceHistory(resource: string, resourceId: string, limit: number = 20) {
+  return useQuery({
+    queryKey: queryKeys.audit.resource(resource, resourceId),
+    queryFn: () => apiClient.get<AuditLogEntry[]>(`/audit/resource/${resource}/${resourceId}?limit=${limit}`),
+    enabled: !!resource && !!resourceId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCleanupAuditLogs() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (daysToKeep: number) =>
+      apiClient.delete<{ deleted: number; remaining: number }>('/audit/cleanup', {
+        data: { confirm: true, daysToKeep },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.audit.all });
     },
   });
 }
