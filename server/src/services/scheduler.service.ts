@@ -1,7 +1,7 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { prisma } from '../index.js';
-import { TaskService } from './task.service.js';
 import { MonitoringService } from './monitoring.service.js';
+import { getMasterAgentService, MasterAgentService } from './master-agent.service.js';
 
 // Redis connection config
 const redisConnection = {
@@ -74,8 +74,22 @@ export class SchedulerService {
 
   private async processTask(job: Job<TaskJobData>): Promise<void> {
     const { taskId, executionId, agentId, prompt } = job.data;
+    const monitoring = MonitoringService.getInstance();
+    const startTime = Date.now();
+    let masterService: MasterAgentService | null = null;
+    let outputBuffer = '';
 
     try {
+      // Get agent and server info
+      const agent = await prisma.agent.findUnique({
+        where: { id: agentId },
+        include: { server: true },
+      });
+
+      if (!agent || !agent.serverId) {
+        throw new Error(`Agent not found or has no server: ${agentId}`);
+      }
+
       // Update execution status to RUNNING
       await prisma.taskExecution.update({
         where: { id: executionId },
@@ -86,15 +100,79 @@ export class SchedulerService {
       });
 
       // Broadcast status change
-      MonitoringService.getInstance().broadcastAgentStatus(agentId, 'BUSY', 'ACTIVE', 'Executing task');
+      monitoring.broadcastAgentStatus(agentId, 'BUSY', 'ACTIVE', 'Executing task');
+      monitoring.broadcastExecution(agentId, taskId, 'running', 'Starting execution...');
 
-      // TODO: Actually execute the task via the agent
-      // This would involve SSH/API call to the MCP server
-      // For now, we simulate execution
-      await this.simulateExecution(taskId, executionId, agentId, prompt);
+      // Get MasterAgentService for this server
+      masterService = await getMasterAgentService(agent.serverId);
+
+      // Execute via MCP protocol (with WebSocket/HTTP fallback to simulation)
+      const result = await masterService.executePrompt(prompt, agentId, {
+        onStart: () => {
+          monitoring.broadcastExecution(agentId, taskId, 'running', 'Execution started');
+        },
+        onOutput: (chunk) => {
+          outputBuffer += chunk;
+          monitoring.broadcastExecution(agentId, taskId, 'running', chunk);
+        },
+        onToolCall: (name, params) => {
+          monitoring.broadcastExecution(
+            agentId,
+            taskId,
+            'running',
+            `Tool call: ${name}(${JSON.stringify(params).slice(0, 100)}...)`
+          );
+        },
+        onFileChange: (path, action) => {
+          monitoring.broadcastExecution(
+            agentId,
+            taskId,
+            'running',
+            `File ${action}: ${path}`
+          );
+        },
+        onComplete: (res) => {
+          monitoring.broadcastExecution(agentId, taskId, 'completed', res.output);
+        },
+        onError: (err) => {
+          monitoring.broadcastExecution(agentId, taskId, 'failed', err.message);
+        },
+      });
+
+      const durationMs = Date.now() - startTime;
+
+      if (result.success) {
+        // Update execution as completed
+        await prisma.taskExecution.update({
+          where: { id: executionId },
+          data: {
+            status: 'COMPLETED',
+            output: result.output || outputBuffer,
+            completedAt: new Date(),
+            durationMs,
+            tokensUsed: result.tokensUsed,
+          },
+        });
+
+        // Update task
+        await prisma.task.update({
+          where: { id: taskId },
+          data: {
+            status: 'COMPLETED',
+            lastRunAt: new Date(),
+            runCount: { increment: 1 },
+          },
+        });
+
+        // Reset agent status
+        monitoring.broadcastAgentStatus(agentId, 'ACTIVE', 'BUSY', 'Task completed');
+      } else {
+        throw new Error(result.error || 'Execution failed');
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const durationMs = Date.now() - startTime;
 
       // Update execution as failed
       await prisma.taskExecution.update({
@@ -102,62 +180,26 @@ export class SchedulerService {
         data: {
           status: 'FAILED',
           error: errorMessage,
+          output: outputBuffer || undefined,
           completedAt: new Date(),
+          durationMs,
+        },
+      });
+
+      // Update task status
+      await prisma.task.update({
+        where: { id: taskId },
+        data: {
+          status: 'FAILED',
         },
       });
 
       // Broadcast failure
-      MonitoringService.getInstance().broadcastAgentStatus(agentId, 'ERROR', 'BUSY', errorMessage);
+      monitoring.broadcastAgentStatus(agentId, 'ERROR', 'BUSY', errorMessage);
+      monitoring.broadcastExecution(agentId, taskId, 'failed', errorMessage);
 
       throw error;
     }
-  }
-
-  private async simulateExecution(
-    taskId: string,
-    executionId: string,
-    agentId: string,
-    prompt: string
-  ): Promise<void> {
-    // Simulate task execution phases
-    const phases = ['starting', 'running', 'completed'] as const;
-
-    for (const phase of phases) {
-      // Broadcast execution progress
-      MonitoringService.getInstance().broadcastExecution(
-        agentId,
-        taskId,
-        phase,
-        phase === 'running' ? `Processing: ${prompt.substring(0, 50)}...` : undefined
-      );
-
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // Update execution as completed
-    await prisma.taskExecution.update({
-      where: { id: executionId },
-      data: {
-        status: 'COMPLETED',
-        output: `Simulated execution of prompt: ${prompt}`,
-        completedAt: new Date(),
-        durationMs: 3000,
-      },
-    });
-
-    // Update task
-    await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        status: 'COMPLETED',
-        lastRunAt: new Date(),
-        runCount: { increment: 1 },
-      },
-    });
-
-    // Reset agent status
-    MonitoringService.getInstance().broadcastAgentStatus(agentId, 'ACTIVE', 'BUSY');
   }
 
   async scheduleTask(
