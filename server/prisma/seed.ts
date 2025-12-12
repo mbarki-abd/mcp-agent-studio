@@ -1,4 +1,5 @@
 import { PrismaClient, ToolCategory } from '@prisma/client';
+import { hashPassword } from '../src/utils/password.js';
 
 const prisma = new PrismaClient();
 
@@ -566,7 +567,69 @@ const toolDefinitions = [
 ];
 
 async function main() {
-  console.log('Seeding tool definitions...');
+  console.log('🌱 Starting database seed...\n');
+
+  // ==================== ORGANIZATIONS ====================
+  console.log('📦 Seeding organizations...');
+
+  const testOrg = await prisma.organization.upsert({
+    where: { slug: 'test-org' },
+    update: {},
+    create: {
+      name: 'Test Organization',
+      slug: 'test-org',
+      plan: 'FREE',
+      maxUsers: 5,
+      maxServers: 2,
+      maxAgents: 10,
+      maxTasksPerMonth: 1000,
+    },
+  });
+  console.log(`  ✅ Organization: ${testOrg.name} (${testOrg.slug})`);
+
+  // ==================== USERS ====================
+  console.log('\n👤 Seeding users...');
+
+  // Test user for E2E tests
+  const hashedPassword = await hashPassword('password123');
+  const testUser = await prisma.user.upsert({
+    where: { email: 'test@example.com' },
+    update: {
+      passwordHash: hashedPassword,
+    },
+    create: {
+      email: 'test@example.com',
+      passwordHash: hashedPassword,
+      name: 'Test User',
+      role: 'USER',
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      organizationId: testOrg.id,
+    },
+  });
+  console.log(`  ✅ Test User: ${testUser.email}`);
+
+  // Admin user
+  const hashedAdminPassword = await hashPassword('password123');
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin@example.com' },
+    update: {
+      passwordHash: hashedAdminPassword,
+    },
+    create: {
+      email: 'admin@example.com',
+      passwordHash: hashedAdminPassword,
+      name: 'Test Admin',
+      role: 'ADMIN',
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      organizationId: testOrg.id,
+    },
+  });
+  console.log(`  ✅ Admin User: ${adminUser.email}`);
+
+  // ==================== TOOLS ====================
+  console.log('\n🔧 Seeding tool definitions...');
 
   for (const tool of toolDefinitions) {
     await prisma.toolDefinition.upsert({
@@ -574,10 +637,28 @@ async function main() {
       update: tool,
       create: tool,
     });
-    console.log(`  Seeded: ${tool.displayName}`);
+    console.log(`  ✅ ${tool.displayName}`);
   }
 
-  console.log(`\nSeeded ${toolDefinitions.length} tool definitions.`);
+  // ==================== SUMMARY ====================
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('✨ Database seed completed successfully!\n');
+  console.log('📊 Summary:');
+  console.log(`  • Organizations: 1`);
+  console.log(`  • Users: 2`);
+  console.log(`  • Tool Definitions: ${toolDefinitions.length}`);
+  console.log('\n🔐 Test Credentials:');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('  TEST USER:');
+  console.log('    Email:    test@example.com');
+  console.log('    Password: password123');
+  console.log('    Role:     USER');
+  console.log('');
+  console.log('  ADMIN USER:');
+  console.log('    Email:    admin@example.com');
+  console.log('    Password: password123');
+  console.log('    Role:     ADMIN');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
 main()
