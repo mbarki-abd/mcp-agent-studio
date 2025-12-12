@@ -1,9 +1,9 @@
 # PLAN-005: MCP Agent Studio V2 Roadmap
 
-**Status:** ACTIVE
+**Status:** ACTIVE (Phase 1 & 2 Complete)
 **Priority:** P0 (Critical)
 **Created:** 2025-12-11
-**Last Updated:** 2025-12-11
+**Last Updated:** 2025-12-12
 
 ---
 
@@ -217,12 +217,12 @@ interface ToolInstallationService {
 }
 ```
 
-**Livrables Phase 1:**
-- [ ] MasterAgentService avec connexion MCP
-- [ ] TaskExecutionService avec exécution réelle
-- [ ] ToolInstallationService
-- [ ] WebSocket events pour progress
-- [ ] Tests d'intégration
+**Livrables Phase 1:** ✅ COMPLETE
+- [x] MasterAgentService avec connexion MCP
+- [x] TaskExecutionService avec exécution réelle
+- [x] ToolInstallationService
+- [x] WebSocket events pour progress
+- [ ] Tests d'intégration (à faire)
 
 ---
 
@@ -278,13 +278,13 @@ interface TerminalProps {
 - ResourceUsageCharts (CPU, Memory, Connections)
 ```
 
-**Livrables Phase 2:**
-- [ ] ServerWizard complet (4 steps)
-- [ ] AgentWizard avec prompt
-- [ ] TaskWizard avec scheduling
-- [ ] ToolWizard avec install
-- [ ] Terminal component (xterm.js)
-- [ ] Real-time charts (Recharts)
+**Livrables Phase 2:** ✅ COMPLETE
+- [x] ServerWizard complet (4 steps)
+- [x] AgentWizard avec prompt
+- [x] TaskWizard avec scheduling
+- [x] Terminal component (xterm.js)
+- [ ] ToolWizard avec install (optionnel)
+- [ ] Real-time charts (Recharts) (optionnel)
 
 ---
 
