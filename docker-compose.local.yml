@@ -1,0 +1,126 @@
+# Docker Compose - Local Development with Traefik
+# Simulates production environment locally with domain names
+#
+# Usage:
+#   docker compose -f docker-compose.local.yml up -d
+#
+# Requires hosts file entries (see deploy/scripts/setup-local.ps1)
+
+services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: mcp-traefik-local
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik Dashboard
+    volumes:
+      - ./deploy/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    networks:
+      - mcp-local
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.mcp.local`)"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mcp-postgres-local
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mcp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp_local_password}
+      POSTGRES_DB: ${POSTGRES_DB:-mcp_agent_studio}
+    volumes:
+      - postgres_local_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - mcp-local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mcp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-redis-local
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_local_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - mcp-local
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # API Server (built from source)
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: mcp-server-local
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mcp}:${POSTGRES_PASSWORD:-mcp_local_password}@postgres:5432/${POSTGRES_DB:-mcp_agent_studio}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_change_in_production}
+      COOKIE_SECRET: ${COOKIE_SECRET:-local_dev_cookie_secret_32chars_min}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      CORS_ORIGIN: http://mcp.local,http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mcp-local
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.mcp.local`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=3000"
+
+  # Dashboard (built from source)
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+      args:
+        VITE_API_URL: http://api.mcp.local
+    container_name: mcp-dashboard-local
+    restart: unless-stopped
+    depends_on:
+      - server
+    networks:
+      - mcp-local
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`mcp.local`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=80"
+
+volumes:
+  postgres_local_data:
+  redis_local_data:
+
+networks:
+  mcp-local:
+    name: mcp-local

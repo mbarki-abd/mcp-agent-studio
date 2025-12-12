@@ -1,6 +1,6 @@
 # PLAN-004: Infrastructure & Deployment
 
-## Status: ACTIVE
+## Status: COMPLETE
 
 | Attribut | Valeur |
 |----------|--------|
@@ -8,6 +8,7 @@
 | Titre | Infrastructure Hetzner & CI/CD |
 | Priorité | P2 (Medium) |
 | Créé | 2025-12-10 |
+| Mise à jour | 2025-12-12 |
 | Dépend de | PLAN-003 |
 
 ---
@@ -55,14 +56,14 @@ Déployer MCP Agent Studio sur infrastructure Hetzner avec:
 
 ## Phases
 
-### Phase 4.1: Provisioning Serveur
+### Phase 4.1: Provisioning Serveur ✅ COMPLETE
 
 **Tasks:**
-- [ ] Créer serveur Hetzner CX21 (Ubuntu 22.04)
-- [ ] Configurer SSH keys
-- [ ] Installer Docker & Docker Compose
-- [ ] Configurer firewall (ufw)
-- [ ] Créer user deploy
+- [x] Créer serveur Hetzner CX21 (Ubuntu 22.04)
+- [x] Configurer SSH keys
+- [x] Installer Docker & Docker Compose
+- [x] Configurer firewall (ufw)
+- [x] Créer user deploy
 
 **Script:**
 ```bash
@@ -80,228 +81,98 @@ ufw enable
 
 ---
 
-### Phase 4.2: Traefik Setup
+### Phase 4.2: Traefik Setup ✅ COMPLETE
 
-**Fichiers:**
+**Fichiers:** `deploy/traefik/`
 ```
 traefik/
-├── traefik.yml
+├── traefik.yml          ✅ Configured
 ├── dynamic/
-│   └── middlewares.yml
+│   └── middlewares.yml  ✅ Rate-limit, headers, security
 └── acme.json
 ```
 
-**traefik.yml:**
-```yaml
-api:
-  dashboard: true
-  insecure: false
-
-entryPoints:
-  web:
-    address: ":80"
-    http:
-      redirections:
-        entryPoint:
-          to: websecure
-  websecure:
-    address: ":443"
-
-certificatesResolvers:
-  letsencrypt:
-    acme:
-      email: admin@ilinqsoft.com
-      storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
-
-providers:
-  docker:
-    exposedByDefault: false
-```
-
 **Tasks:**
-- [ ] Configurer Traefik
-- [ ] Configurer Let's Encrypt
-- [ ] Configurer middlewares (rate-limit, headers)
-- [ ] Test SSL
+- [x] Configurer Traefik - `deploy/traefik/traefik.yml`
+- [x] Configurer Let's Encrypt
+- [x] Configurer middlewares (rate-limit, headers) - `deploy/traefik/dynamic/middlewares.yml`
+- [x] Test SSL
 
 ---
 
-### Phase 4.3: Docker Compose Production
+### Phase 4.3: Docker Compose Production ✅ COMPLETE
 
-**docker-compose.prod.yml:**
-```yaml
-version: '3.8'
+**Fichiers:** `deploy/docker-compose.prod.yml`, `Dockerfile.server`, `Dockerfile.dashboard`
 
-services:
-  traefik:
-    image: traefik:v3.0
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik:/etc/traefik
-      - traefik_certs:/letsencrypt
-
-  server:
-    image: ghcr.io/mbarki/mcp-agent-studio-server:latest
-    restart: unless-stopped
-    environment:
-      - DATABASE_URL=postgresql://user:pass@postgres:5432/mcp
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET}
-    depends_on:
-      - postgres
-      - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.mcp-studio.ilinqsoft.com`)"
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-
-  dashboard:
-    image: ghcr.io/mbarki/mcp-agent-studio-dashboard:latest
-    restart: unless-stopped
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`mcp-studio.ilinqsoft.com`)"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: mcp
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: mcp_agent_studio
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-  traefik_certs:
-```
+Services configurés:
+- Traefik (reverse proxy + SSL)
+- Server (Fastify API)
+- Dashboard (React app via nginx)
+- PostgreSQL 16
+- Redis 7
+- Backup (pg_dump scheduled)
 
 **Tasks:**
-- [ ] Finaliser docker-compose.prod.yml
-- [ ] Configurer secrets (.env.prod)
-- [ ] Test local avec docker-compose
-- [ ] Déployer sur Hetzner
+- [x] Finaliser docker-compose.prod.yml - `deploy/docker-compose.prod.yml`
+- [x] Dockerfiles - `Dockerfile.server`, `Dockerfile.dashboard`
+- [x] Configurer secrets (.env.prod)
+- [x] Test local avec docker-compose
+- [x] Déployer sur Hetzner
 
 ---
 
-### Phase 4.4: GitHub Actions CI/CD
+### Phase 4.4: GitHub Actions CI/CD ✅ COMPLETE
 
-**Workflows:**
+**Fichiers:** `.github/workflows/`
 ```
 .github/workflows/
-├── ci.yml           # Test + Build on PR
-├── deploy.yml       # Deploy on main merge
-└── release.yml      # Semantic versioning
-```
-
-**ci.yml:**
-```yaml
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm test
-
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - run: docker build -f Dockerfile.server -t server .
-      - run: docker build -f Dockerfile.dashboard -t dashboard .
-```
-
-**deploy.yml:**
-```yaml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: ghcr.io/mbarki/mcp-agent-studio-server:latest
-
-      - name: Deploy to Hetzner
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: deploy
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          script: |
-            cd /opt/mcp-agent-studio
-            docker compose pull
-            docker compose up -d
+├── ci.yml           ✅ Lint, typecheck, build, docker-build
+├── deploy.yml       ✅ Build, push to GHCR, SSH deploy
+└── release.yml      ✅ Semantic versioning
 ```
 
 **Tasks:**
-- [ ] Configurer CI workflow
-- [ ] Configurer Deploy workflow
-- [ ] Configurer GitHub secrets
-- [ ] Test pipeline complet
+- [x] Configurer CI workflow - `.github/workflows/ci.yml`
+- [x] Configurer Deploy workflow - `.github/workflows/deploy.yml`
+- [x] Configurer Release workflow - `.github/workflows/release.yml`
+- [x] Configurer GitHub secrets
+- [x] Test pipeline complet
 
 ---
 
-### Phase 4.5: Monitoring & Logging
+### Phase 4.5: Monitoring & Logging ✅ COMPLETE
 
-**Stack:**
-- Prometheus (métriques)
-- Loki (logs)
+**Stack:** `deploy/monitoring/` + `deploy/docker-compose.monitoring.yml`
+- Prometheus (métriques) + Alert rules
+- Loki + Promtail (logs)
 - Grafana (dashboards)
+- Node Exporter, PostgreSQL Exporter, Redis Exporter, cAdvisor
+
+**Fichiers créés:**
+```
+deploy/monitoring/
+├── prometheus/
+│   ├── prometheus.yml        # Scrape configs
+│   └── alerts/mcp-alerts.yml # Alert rules
+├── loki/
+│   └── loki-config.yml       # Log aggregation
+├── promtail/
+│   └── promtail-config.yml   # Log collection
+└── grafana/
+    ├── provisioning/
+    │   ├── datasources/datasources.yml
+    │   └── dashboards/dashboards.yml
+    └── dashboards/mcp-overview.json
+
+deploy/docker-compose.monitoring.yml  # Full monitoring stack
+```
 
 **Tasks:**
-- [ ] Ajouter Prometheus
-- [ ] Ajouter Loki + Promtail
-- [ ] Ajouter Grafana
-- [ ] Créer dashboards
-- [ ] Configurer alerting
+- [x] Ajouter Prometheus avec scrape configs
+- [x] Ajouter Loki + Promtail
+- [x] Ajouter Grafana avec auto-provisioning
+- [x] Créer dashboard MCP Overview
+- [x] Configurer alerting (mcp-alerts.yml)
 
 ---
 
@@ -317,12 +188,12 @@ jobs:
 
 ## Critères de Complétion
 
-- [ ] Serveur provisionné et sécurisé
-- [ ] SSL fonctionnel sur tous les domaines
-- [ ] CI/CD automatisé
-- [ ] Déploiement zero-downtime
-- [ ] Monitoring opérationnel
-- [ ] Backups configurés
+- [x] Serveur provisionné et sécurisé
+- [x] SSL fonctionnel sur tous les domaines
+- [x] CI/CD automatisé
+- [x] Déploiement zero-downtime
+- [x] Monitoring opérationnel
+- [x] Backups configurés
 
 ---
 

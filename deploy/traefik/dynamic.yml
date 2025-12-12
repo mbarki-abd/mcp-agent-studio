@@ -1,0 +1,44 @@
+# Traefik Dynamic Configuration - Local Development
+# File-based routing for Windows compatibility
+
+http:
+  routers:
+    # Dashboard router - mcp.local
+    dashboard:
+      rule: "Host(`mcp.local`)"
+      service: dashboard
+      entryPoints:
+        - web
+
+    # API router - api.mcp.local
+    api:
+      rule: "Host(`api.mcp.local`)"
+      service: api
+      entryPoints:
+        - web
+
+    # Traefik dashboard router - traefik.mcp.local
+    traefik-dashboard:
+      rule: "Host(`traefik.mcp.local`)"
+      service: traefik-api
+      entryPoints:
+        - web
+
+  services:
+    # Dashboard service
+    dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://dashboard:80"
+
+    # API service
+    api:
+      loadBalancer:
+        servers:
+          - url: "http://server:3000"
+
+    # Traefik API service
+    traefik-api:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:8080"

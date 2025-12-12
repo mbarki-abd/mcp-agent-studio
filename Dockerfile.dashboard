@@ -9,25 +9,35 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 # Build args
 ARG VITE_API_URL
 
-# Copy workspace files
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+# Copy all workspace config files first
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY turbo.json ./
+
+# Copy package.json files for all packages
 COPY packages/types/package.json ./packages/types/
 COPY apps/dashboard/package.json ./apps/dashboard/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install ALL dependencies with shamefully-hoist to put all deps in root node_modules
+RUN pnpm install --shamefully-hoist
 
 # Copy source files
 COPY packages/types ./packages/types
 COPY apps/dashboard ./apps/dashboard
 COPY tsconfig.json ./
 
-# Build packages
-RUN pnpm --filter @mcp/types build
+# Install build tools globally (pnpm hoisting doesn't put them in workspace package node_modules)
+RUN npm install -g tsup typescript vite
 
-# Build dashboard with env
+# Build types first using global tsup
+WORKDIR /app
+RUN tsup packages/types/src/index.ts --outDir packages/types/dist --format cjs,esm --dts
+
+# Build dashboard with env (skip tsc - types are checked in CI)
+WORKDIR /app/apps/dashboard
 ENV VITE_API_URL=$VITE_API_URL
-RUN pnpm --filter dashboard build
+RUN /usr/local/bin/vite build
+
+WORKDIR /app
 
 # Production stage with nginx
 FROM nginx:alpine AS runner

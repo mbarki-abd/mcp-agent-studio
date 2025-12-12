@@ -1,0 +1,151 @@
+# Docker Compose - Monitoring Stack
+# Use with: docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml up -d
+
+services:
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: mcp-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    networks:
+      - mcp-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.mcp-studio.ilinqsoft.com`)"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.prometheus.middlewares=auth@file"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+
+  # Loki - Log aggregation
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: mcp-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki:/etc/loki:ro
+      - loki_data:/loki
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Promtail - Log collector
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: mcp-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yml
+    volumes:
+      - ./monitoring/promtail:/etc/promtail:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - mcp-network
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: mcp-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.mcp-studio.ilinqsoft.com
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-piechart-panel
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - mcp-network
+    depends_on:
+      - prometheus
+      - loki
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.mcp-studio.ilinqsoft.com`)"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # Node Exporter - Host metrics
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: mcp-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - mcp-network
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: mcp-postgres-exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-mcp}:${POSTGRES_PASSWORD}@postgres:5432/mcp_agent_studio?sslmode=disable
+    networks:
+      - mcp-network
+    depends_on:
+      - postgres
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: mcp-redis-exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - mcp-network
+    depends_on:
+      - redis
+
+  # cAdvisor - Container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: mcp-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - mcp-network
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  mcp-network:
+    external: true

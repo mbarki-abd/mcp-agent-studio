@@ -74,17 +74,21 @@ function getCorsOrigins(): string[] {
 // Initialize Prisma
 export const prisma = new PrismaClient();
 
-// Create Fastify instance
+// Create Fastify instance with environment-appropriate logging
 const fastify = Fastify({
-  logger: {
-    level: process.env.LOG_LEVEL || 'info',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
+  logger: isProduction
+    ? {
+        level: process.env.LOG_LEVEL || 'info',
+      }
+    : {
+        level: process.env.LOG_LEVEL || 'info',
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+          },
+        },
       },
-    },
-  },
 });
 
 // Register plugins
