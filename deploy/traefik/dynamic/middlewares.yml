@@ -18,7 +18,7 @@ http:
           - "DELETE"
           - "OPTIONS"
         accessControlAllowOriginList:
-          - "https://${DOMAIN}"
+          - "https://mcp-studio.ilinqsoft.com"
         accessControlAllowHeaders:
           - "Authorization"
           - "Content-Type"

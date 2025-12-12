@@ -43,9 +43,9 @@ pnpm dev
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Dashboard** | https://mcp-studio.ilinqsoft.com | Frontend |
-| **API Server** | https://mcp-studio.ilinqsoft.com/api | Backend |
-| **API Docs** | https://mcp-studio.ilinqsoft.com/docs | Documentation |
-| **Health** | https://mcp-studio.ilinqsoft.com/health | Monitoring |
+| **API Server** | https://api.mcp-studio.ilinqsoft.com | Backend |
+| **API Docs** | https://api.mcp-studio.ilinqsoft.com/docs | Documentation |
+| **Health** | https://api.mcp-studio.ilinqsoft.com/health | Monitoring |
 | **Traefik** | https://traefik.mcp-studio.ilinqsoft.com | Reverse Proxy |
 
 **Architecture:**

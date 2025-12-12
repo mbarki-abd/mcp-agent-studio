@@ -79,7 +79,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGIN: https://${DOMAIN:-mcp-studio.ilinqsoft.com}
-      API_URL: https://${DOMAIN:-mcp-studio.ilinqsoft.com}
+      API_URL: https://api.${DOMAIN:-mcp-studio.ilinqsoft.com}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,7 +90,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mcp-api.rule=Host(`${DOMAIN:-mcp-studio.ilinqsoft.com}`) && PathPrefix(`/api`, `/docs`, `/health`)"
+      - "traefik.http.routers.mcp-api.rule=Host(`api.${DOMAIN:-mcp-studio.ilinqsoft.com}`)"
       - "traefik.http.routers.mcp-api.entrypoints=websecure"
       - "traefik.http.routers.mcp-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.mcp-api.loadbalancer.server.port=3000"
@@ -101,7 +101,7 @@ services:
       context: .
       dockerfile: Dockerfile.dashboard
       args:
-        VITE_API_URL: https://${DOMAIN:-mcp-studio.ilinqsoft.com}
+        VITE_API_URL: https://api.${DOMAIN:-mcp-studio.ilinqsoft.com}
     container_name: mcp-dashboard
     networks:
       - mcp-network
