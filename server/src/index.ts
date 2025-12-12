@@ -137,6 +137,7 @@ async function registerPlugins() {
         { name: 'Tasks', description: 'Task management' },
         { name: 'Tools', description: 'Unix tools management' },
         { name: 'Monitoring', description: 'Real-time monitoring' },
+        { name: 'Audit', description: 'Audit log management (admin only)' },
       ],
     },
   });
@@ -230,6 +231,10 @@ async function registerRoutes() {
   // Chat routes
   const { chatRoutes } = await import('./routes/chat.routes.js');
   await fastify.register(chatRoutes, { prefix: '/api/chat' });
+
+  // Audit routes (admin only)
+  const { auditRoutes } = await import('./routes/audit.routes.js');
+  await fastify.register(auditRoutes, { prefix: '/api/audit' });
 
   // WebSocket routes (monitoring)
   const { websocketRoutes } = await import('./websocket/routes.js');
