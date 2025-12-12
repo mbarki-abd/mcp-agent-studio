@@ -221,6 +221,10 @@ export default function AgentDashboard() {
                   Edit
                 </DropdownMenuItem>
               </Can>
+              <DropdownMenuItem onClick={() => navigate(`/agents/${id}/stats`)}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Statistics
+              </DropdownMenuItem>
               {agent.status === 'PENDING_VALIDATION' && (
                 <Can I="update" a="Agent">
                   <DropdownMenuItem onClick={handleValidate}>

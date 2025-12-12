@@ -5,6 +5,7 @@ import type { ModuleDefinition } from '../../core/modules';
 const ServersList = lazy(() => import('./pages/ServersList'));
 const CreateServer = lazy(() => import('./pages/CreateServer'));
 const ServerDashboard = lazy(() => import('./pages/ServerDashboard'));
+const ServerHealth = lazy(() => import('./pages/ServerHealth'));
 
 export const serversModule: ModuleDefinition = {
   id: 'servers',
@@ -27,6 +28,11 @@ export const serversModule: ModuleDefinition = {
     {
       path: '/servers/:id',
       element: ServerDashboard,
+      permissions: [{ action: 'read', subject: 'ServerConfiguration' }],
+    },
+    {
+      path: '/servers/:id/health',
+      element: ServerHealth,
       permissions: [{ action: 'read', subject: 'ServerConfiguration' }],
     },
   ],

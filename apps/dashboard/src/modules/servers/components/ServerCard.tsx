@@ -1,4 +1,4 @@
-import { Server, MoreVertical, Trash2, Edit, RefreshCw, ExternalLink, LayoutDashboard, Eye } from 'lucide-react';
+import { Server, MoreVertical, Trash2, Edit, RefreshCw, ExternalLink, LayoutDashboard, Activity, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../components/ui/button';
 import {
@@ -84,6 +84,10 @@ export function ServerCard({
             <DropdownMenuItem onClick={handleViewDashboard}>
               <LayoutDashboard className="h-4 w-4 mr-2" />
               View Dashboard
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/servers/${server.id}/health`); }}>
+              <Activity className="h-4 w-4 mr-2" />
+              Health & Stats
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit?.(); }}>

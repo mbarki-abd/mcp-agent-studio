@@ -172,6 +172,84 @@ export function useValidateServerConnection() {
   });
 }
 
+// Server Health API Response
+export interface ServerHealthApiResponse {
+  serverId: string;
+  serverName: string;
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  serverStatus: string;
+  lastHealthCheck: string | null;
+  lastError: string | null;
+  serverVersion: string | null;
+  components: {
+    agents: {
+      total: number;
+      active: number;
+      busy: number;
+      error: number;
+      healthScore: number;
+    };
+    tools: {
+      total: number;
+      healthy: number;
+      unhealthy: number;
+      healthScore: number;
+    };
+  };
+  uptime: {
+    lastCheck: string;
+    checkAge: number;
+  } | null;
+}
+
+// Server Stats API Response
+export interface ServerStatsApiResponse {
+  serverId: string;
+  serverName: string;
+  period: {
+    from: string;
+    to: string;
+  };
+  executions: {
+    total: number;
+    success: number;
+    successRate: number;
+    avgDurationMs: number;
+    avgTokensUsed: number;
+    breakdown: Record<string, number>;
+  };
+  tasks: {
+    total: number;
+    breakdown: Record<string, number>;
+  };
+  agents: {
+    total: number;
+    breakdown: Record<string, number>;
+  };
+}
+
+export function useServerHealth(serverId: string) {
+  return useQuery({
+    queryKey: ['servers', serverId, 'health'] as const,
+    queryFn: () => apiClient.get<ServerHealthApiResponse>(`/servers/${serverId}/health`),
+    enabled: !!serverId,
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Auto refresh every minute
+  });
+}
+
+export function useServerStats(serverId: string, since?: string) {
+  return useQuery({
+    queryKey: ['servers', serverId, 'stats', since] as const,
+    queryFn: () => {
+      const params = since ? `?since=${encodeURIComponent(since)}` : '';
+      return apiClient.get<ServerStatsApiResponse>(`/servers/${serverId}/stats${params}`);
+    },
+    enabled: !!serverId,
+    staleTime: 60 * 1000,
+  });
+}
+
 export function useUninstallTool() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -289,6 +367,104 @@ export function useValidateAgent() {
   });
 }
 
+// Agent Stats API Response
+export interface AgentStatsApiResponse {
+  agentId: string;
+  agentName: string;
+  period: {
+    from: string;
+    to: string;
+  };
+  summary: {
+    totalExecutions: number;
+    successCount: number;
+    failureCount: number;
+    successRate: number;
+    avgDurationMs: number;
+    avgTokensUsed: number;
+    totalTokensUsed: number;
+  };
+  breakdown: Record<string, number>;
+}
+
+// Agent Executions API Response
+export interface AgentExecutionsApiResponse {
+  executions: Array<{
+    id: string;
+    taskId: string;
+    taskTitle: string;
+    taskPriority: string;
+    status: string;
+    prompt: string;
+    output: string | null;
+    error: string | null;
+    exitCode: number | null;
+    tokensUsed: number | null;
+    durationMs: number | null;
+    startedAt: string;
+    completedAt: string | null;
+  }>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Agent Hierarchy API Response
+export interface AgentHierarchyNode {
+  id: string;
+  name: string;
+  displayName: string;
+  role: string;
+  status: string;
+  supervisorId: string | null;
+  children: AgentHierarchyNode[];
+}
+
+export interface AgentHierarchyApiResponse {
+  hierarchy: AgentHierarchyNode[];
+}
+
+export function useAgentStats(agentId: string, since?: string) {
+  return useQuery({
+    queryKey: queryKeys.agents.stats(agentId),
+    queryFn: () => {
+      const params = since ? `?since=${encodeURIComponent(since)}` : '';
+      return apiClient.get<AgentStatsApiResponse>(`/agents/${agentId}/stats${params}`);
+    },
+    enabled: !!agentId,
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useAgentExecutions(agentId: string, params?: { page?: number; pageSize?: number; status?: string }) {
+  return useQuery({
+    queryKey: ['agents', agentId, 'executions', params] as const,
+    queryFn: () => {
+      const searchParams = new URLSearchParams();
+      if (params?.page) searchParams.set('page', String(params.page));
+      if (params?.pageSize) searchParams.set('pageSize', String(params.pageSize));
+      if (params?.status) searchParams.set('status', params.status);
+      const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+      return apiClient.get<AgentExecutionsApiResponse>(`/agents/${agentId}/executions${query}`);
+    },
+    enabled: !!agentId,
+  });
+}
+
+export function useAgentHierarchy(serverId?: string) {
+  return useQuery({
+    queryKey: queryKeys.agents.hierarchy(serverId),
+    queryFn: () => {
+      const params = serverId ? `?serverId=${serverId}` : '';
+      return apiClient.get<AgentHierarchyApiResponse>(`/agents/hierarchy${params}`);
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
 // Task hooks
 export function useTasks(params?: { status?: string; agentId?: string; page?: number; pageSize?: number }) {
   return useQuery({
@@ -387,6 +563,81 @@ export function useCancelTask() {
   });
 }
 
+// Bulk operations response type
+export interface BulkOperationResult {
+  success: boolean;
+  results: Array<{
+    id: string;
+    success: boolean;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+}
+
+// Bulk cancel tasks
+export function useBulkCancelTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskIds: string[]) =>
+      apiClient.post<BulkOperationResult>('/tasks/bulk/cancel', { taskIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
+// Bulk delete tasks
+export function useBulkDeleteTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskIds: string[]) =>
+      apiClient.post<BulkOperationResult>('/tasks/bulk/delete', { taskIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
+// Bulk update task status
+export function useBulkUpdateTaskStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskIds, status }: { taskIds: string[]; status: 'DRAFT' | 'PENDING' | 'SCHEDULED' | 'CANCELLED' }) =>
+      apiClient.post<BulkOperationResult>('/tasks/bulk/status', { taskIds, status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
+// Bulk execute tasks
+export function useBulkExecuteTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskIds: string[]) =>
+      apiClient.post<BulkOperationResult>('/tasks/bulk/execute', { taskIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
+// Bulk retry failed tasks
+export function useBulkRetryTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskIds: string[]) =>
+      apiClient.post<BulkOperationResult>('/tasks/bulk/retry', { taskIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
+    },
+  });
+}
+
 // Task Dependencies hooks
 export interface TaskDependency {
   id: string;
@@ -477,6 +728,23 @@ export function useInstallTool() {
   return useMutation({
     mutationFn: ({ serverId, toolId }: { serverId: string; toolId: string }) =>
       apiClient.post<ServerTool>(`/tools/servers/${serverId}/install`, { toolId }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tools.server(variables.serverId) });
+    },
+  });
+}
+
+export interface ToolHealthCheckResult {
+  toolName: string;
+  healthStatus: 'HEALTHY' | 'UNHEALTHY' | 'UNKNOWN';
+  lastHealthCheck: string;
+}
+
+export function useToolHealthCheck() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serverId, toolId }: { serverId: string; toolId: string }) =>
+      apiClient.post<ToolHealthCheckResult>(`/tools/servers/${serverId}/tools/${toolId}/health`),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tools.server(variables.serverId) });
     },
@@ -729,15 +997,102 @@ export function useCleanupAuditLogs() {
   });
 }
 
+export interface AuditExportParams {
+  startDate?: string;
+  endDate?: string;
+  format?: 'json' | 'csv';
+}
+
+export interface AuditExportResult {
+  logs: AuditLogEntry[];
+  count: number;
+  exportedAt: string;
+}
+
+export function useAuditExport() {
+  return useMutation({
+    mutationFn: async ({ startDate, endDate, format = 'json' }: AuditExportParams) => {
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      params.append('format', format);
+
+      if (format === 'csv') {
+        const response = await apiClient.get<string>(`/audit/export?${params.toString()}`);
+        return { csv: response, format: 'csv' as const };
+      }
+      return apiClient.get<AuditExportResult>(`/audit/export?${params.toString()}`);
+    },
+  });
+}
+
+export interface IntegrityCheckResult {
+  valid: boolean;
+  total: number;
+  checked: number;
+  invalid: number;
+  errors: Array<{ id: string; error: string }>;
+}
+
+export function useVerifyAuditIntegrity(limit: number = 100) {
+  return useQuery({
+    queryKey: ['audit', 'integrity', limit],
+    queryFn: () => apiClient.get<IntegrityCheckResult>(`/audit/verify-integrity?limit=${limit}`),
+    enabled: false, // Only run when explicitly triggered
+  });
+}
+
 // =====================================================
 // Dashboard Hooks
 // =====================================================
 
+// Raw API response type from backend
+export interface DashboardStatsApiResponse {
+  overview: {
+    servers: { total: number; online: number; offline: number };
+    agents: { total: number; active: number; inactive: number };
+    tasks: { total: number; running: number; pending: number };
+  };
+  executionStats: {
+    period: string;
+    total: number;
+    success: number;
+    failure: number;
+    successRate: number;
+    breakdown: Record<string, number>;
+  };
+  recentExecutions: Array<{
+    id: string;
+    taskTitle: string;
+    agentName: string;
+    status: string;
+    durationMs: number | null;
+    tokensUsed: number | null;
+    startedAt: string;
+    completedAt: string | null;
+  }>;
+}
+
+// Transformed type for frontend components
 export interface DashboardStats {
   servers: { total: number; online: number; offline: number };
   agents: { total: number; active: number; idle: number; error: number };
   tasks: { total: number; pending: number; running: number; completed: number; failed: number };
   executions: { today: number; thisWeek: number; avgDuration: number };
+}
+
+// Raw activity from backend (audit log based)
+export interface DashboardActivityApiResponse {
+  activities: Array<{
+    id: string;
+    action: string;
+    resource: string;
+    resourceId?: string;
+    status: string;
+    userEmail?: string;
+    timestamp: string;
+    metadata?: Record<string, unknown>;
+  }>;
 }
 
 export interface DashboardActivity {
@@ -749,17 +1104,73 @@ export interface DashboardActivity {
   timestamp: string;
 }
 
+// Raw API response from backend
+export interface DashboardHealthApiResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  components: {
+    database: { status: 'healthy' | 'unhealthy' };
+    servers: Array<{
+      id: string;
+      name: string;
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      lastCheck: string | null;
+      error: string | null;
+    }>;
+  };
+}
+
+// Transformed type for frontend components
 export interface DashboardHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  database: { status: string; latency: number };
-  redis?: { status: string; latency: number };
-  servers: { healthy: number; unhealthy: number };
+  timestamp: string;
+  database: { status: 'healthy' | 'unhealthy' };
+  servers: {
+    total: number;
+    healthy: number;
+    degraded: number;
+    unhealthy: number;
+    details: Array<{
+      id: string;
+      name: string;
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      lastCheck: string | null;
+      error: string | null;
+    }>;
+  };
 }
 
 export function useDashboardStats() {
   return useQuery({
     queryKey: queryKeys.dashboard.stats,
-    queryFn: () => apiClient.get<DashboardStats>('/dashboard/stats'),
+    queryFn: async (): Promise<DashboardStats> => {
+      const response = await apiClient.get<DashboardStatsApiResponse>('/dashboard/stats');
+
+      // Transform API response to frontend format
+      const { overview, executionStats } = response;
+
+      return {
+        servers: overview.servers,
+        agents: {
+          total: overview.agents.total,
+          active: overview.agents.active,
+          idle: overview.agents.inactive,
+          error: 0, // Not tracked in backend
+        },
+        tasks: {
+          total: overview.tasks.total,
+          pending: overview.tasks.pending,
+          running: overview.tasks.running,
+          completed: executionStats.breakdown?.COMPLETED ?? 0,
+          failed: executionStats.failure,
+        },
+        executions: {
+          today: executionStats.total, // 7-day total for now
+          thisWeek: executionStats.total,
+          avgDuration: 0, // Not calculated in backend
+        },
+      };
+    },
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 60 * 1000, // Auto-refresh every minute
   });
@@ -768,7 +1179,48 @@ export function useDashboardStats() {
 export function useDashboardActivity(limit: number = 20) {
   return useQuery({
     queryKey: queryKeys.dashboard.activity(limit),
-    queryFn: () => apiClient.get<{ activities: DashboardActivity[] }>(`/dashboard/activity?limit=${limit}`),
+    queryFn: async () => {
+      const response = await apiClient.get<DashboardActivityApiResponse>(`/dashboard/activity?limit=${limit}`);
+
+      // Transform audit log actions to activity types
+      const activities: DashboardActivity[] = response.activities.map((log) => {
+        let type: DashboardActivity['type'] = 'task_completed';
+        let message = `${log.action} on ${log.resource}`;
+
+        // Map audit actions to activity types
+        if (log.resource === 'Task') {
+          if (log.action === 'CREATE') {
+            type = 'task_completed';
+            message = `Task created`;
+          } else if (log.status === 'FAILURE') {
+            type = 'task_failed';
+            message = `Task failed`;
+          }
+        } else if (log.resource === 'Agent' && log.action === 'CREATE') {
+          type = 'agent_created';
+          message = `Agent created`;
+        } else if (log.resource === 'Server') {
+          if (log.action === 'SERVER_CONNECT') {
+            type = 'server_connected';
+            message = `Server connected`;
+          } else if (log.status === 'FAILURE') {
+            type = 'server_error';
+            message = `Server error`;
+          }
+        }
+
+        return {
+          id: log.id,
+          type,
+          message: log.userEmail ? `${message} by ${log.userEmail}` : message,
+          resourceId: log.resourceId,
+          resourceType: log.resource,
+          timestamp: log.timestamp,
+        };
+      });
+
+      return { activities };
+    },
     staleTime: 30 * 1000,
   });
 }
@@ -776,7 +1228,28 @@ export function useDashboardActivity(limit: number = 20) {
 export function useDashboardHealth() {
   return useQuery({
     queryKey: queryKeys.dashboard.health,
-    queryFn: () => apiClient.get<DashboardHealth>('/dashboard/health'),
+    queryFn: async (): Promise<DashboardHealth> => {
+      const response = await apiClient.get<DashboardHealthApiResponse>('/dashboard/health');
+
+      // Transform API response to frontend format
+      const servers = response.components.servers;
+      const healthyCnt = servers.filter((s) => s.status === 'healthy').length;
+      const degradedCnt = servers.filter((s) => s.status === 'degraded').length;
+      const unhealthyCnt = servers.filter((s) => s.status === 'unhealthy').length;
+
+      return {
+        status: response.status,
+        timestamp: response.timestamp,
+        database: response.components.database,
+        servers: {
+          total: servers.length,
+          healthy: healthyCnt,
+          degraded: degradedCnt,
+          unhealthy: unhealthyCnt,
+          details: servers,
+        },
+      };
+    },
     staleTime: 15 * 1000, // 15 seconds
     refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
   });

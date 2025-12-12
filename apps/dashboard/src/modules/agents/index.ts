@@ -5,6 +5,7 @@ import type { ModuleDefinition } from '../../core/modules';
 const AgentsList = lazy(() => import('./pages/AgentsList'));
 const AgentDashboard = lazy(() => import('./pages/AgentDashboard'));
 const CreateAgent = lazy(() => import('./pages/CreateAgent'));
+const AgentStats = lazy(() => import('./pages/AgentStats'));
 
 export const agentsModule: ModuleDefinition = {
   id: 'agents',
@@ -34,6 +35,11 @@ export const agentsModule: ModuleDefinition = {
       path: '/agents/:id/edit',
       element: CreateAgent,
       permissions: [{ action: 'update', subject: 'Agent' }],
+    },
+    {
+      path: '/agents/:id/stats',
+      element: AgentStats,
+      permissions: [{ action: 'read', subject: 'Agent' }],
     },
   ],
 

@@ -1,11 +1,12 @@
-import { Bot, Server, ListTodo, Activity, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Bot, Server, ListTodo, Activity, Clock, CheckCircle, XCircle, Loader2, Database, AlertTriangle, Heart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useDashboardStats, useDashboardActivity, type DashboardActivity } from '../core/api/hooks';
+import { useDashboardStats, useDashboardActivity, useDashboardHealth, type DashboardActivity, type DashboardHealth } from '../core/api/hooks';
 
 export function DashboardHome() {
   const navigate = useNavigate();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: activityData, isLoading: activityLoading } = useDashboardActivity(10);
+  const { data: health, isLoading: healthLoading } = useDashboardHealth();
 
   return (
     <div className="space-y-6">
@@ -92,6 +93,100 @@ export function DashboardHome() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* System Health */}
+      <div className="bg-card border border-border rounded-lg p-6">
+        <h2 className="text-lg font-semibold mb-4">System Health</h2>
+        {healthLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : health ? (
+          <div className="space-y-4">
+            {/* Overall Status */}
+            <div className="flex items-center gap-3">
+              <HealthStatusBadge status={health.status} />
+              <span className="text-sm text-muted-foreground">
+                Last check: {new Date(health.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+
+            {/* Components Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Database */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div className={`p-2 rounded-lg ${
+                  health.database.status === 'healthy' ? 'bg-green-100' : 'bg-red-100'
+                }`}>
+                  <Database className={`w-4 h-4 ${
+                    health.database.status === 'healthy' ? 'text-green-600' : 'text-red-600'
+                  }`} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Database</p>
+                  <p className={`text-xs ${
+                    health.database.status === 'healthy' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {health.database.status === 'healthy' ? 'Connected' : 'Disconnected'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Servers */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <div className={`p-2 rounded-lg ${
+                  health.servers.unhealthy === 0 ? 'bg-green-100' :
+                  health.servers.healthy > 0 ? 'bg-yellow-100' : 'bg-red-100'
+                }`}>
+                  <Server className={`w-4 h-4 ${
+                    health.servers.unhealthy === 0 ? 'text-green-600' :
+                    health.servers.healthy > 0 ? 'text-yellow-600' : 'text-red-600'
+                  }`} />
+                </div>
+                <div>
+                  <p className="font-medium text-sm">Servers</p>
+                  <p className="text-xs text-muted-foreground">
+                    {health.servers.healthy}/{health.servers.total} healthy
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Server Details (if any have issues) */}
+            {(health.servers.unhealthy > 0 || health.servers.degraded > 0) && (
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  Servers with issues
+                </p>
+                <div className="space-y-2">
+                  {health.servers.details
+                    .filter((s) => s.status !== 'healthy')
+                    .map((server) => (
+                      <div
+                        key={server.id}
+                        className="flex items-center justify-between text-sm p-2 rounded bg-muted"
+                      >
+                        <span>{server.name}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          server.status === 'degraded'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {server.status}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center text-muted-foreground py-8">
+            Unable to load health status
+          </div>
+        )}
       </div>
 
       {/* Extra Stats Row */}
@@ -224,5 +319,37 @@ function ActivityItem({ activity }: { activity: DashboardActivity }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function HealthStatusBadge({ status }: { status: DashboardHealth['status'] }) {
+  const config = {
+    healthy: {
+      label: 'All Systems Operational',
+      bg: 'bg-green-100',
+      text: 'text-green-700',
+      icon: Heart,
+    },
+    degraded: {
+      label: 'Degraded Performance',
+      bg: 'bg-yellow-100',
+      text: 'text-yellow-700',
+      icon: AlertTriangle,
+    },
+    unhealthy: {
+      label: 'System Issues Detected',
+      bg: 'bg-red-100',
+      text: 'text-red-700',
+      icon: XCircle,
+    },
+  };
+
+  const { label, bg, text, icon: Icon } = config[status];
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${bg} ${text}`}>
+      <Icon className="w-4 h-4" />
+      {label}
+    </span>
   );
 }

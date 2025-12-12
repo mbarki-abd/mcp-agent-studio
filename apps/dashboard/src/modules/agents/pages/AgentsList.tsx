@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Bot, RefreshCw, AlertCircle, Filter } from 'lucide-react';
+import { Plus, Bot, RefreshCw, AlertCircle, Filter, LayoutGrid, GitBranch } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import {
@@ -10,11 +10,15 @@ import {
   DropdownMenuTrigger,
 } from '../../../components/ui/dropdown-menu';
 import { AgentCard } from '../components/AgentCard';
+import { AgentHierarchyTree } from '../components/AgentHierarchyTree';
 import { useAgents, useDeleteAgent, useValidateAgent } from '../../../core/api';
 import { useAgentsStore } from '../stores/agents.store';
 import { useAgentStatus, useAgentsSubscription } from '../../../core/websocket';
 import { Can } from '../../../core/auth';
+import { cn } from '../../../lib/utils';
 import type { AgentStatus, AgentStatusEvent } from '@mcp/types';
+
+type ViewMode = 'grid' | 'hierarchy';
 
 const statusFilters: Array<{ value: AgentStatus | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'All Status' },
@@ -29,6 +33,7 @@ export default function AgentsList() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<AgentStatus | 'ALL'>('ALL');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   const { data, isLoading, error, refetch } = useAgents({
     status: statusFilter !== 'ALL' ? statusFilter : undefined,
@@ -133,10 +138,45 @@ export default function AgentsList() {
         <Button variant="outline" size="icon" onClick={() => refetch()}>
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center rounded-lg border bg-muted p-1">
+          <button
+            type="button"
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 text-sm rounded-md transition-colors',
+              viewMode === 'grid'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setViewMode('grid')}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Grid
+          </button>
+          <button
+            type="button"
+            className={cn(
+              'flex items-center gap-1 px-3 py-1 text-sm rounded-md transition-colors',
+              viewMode === 'hierarchy'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setViewMode('hierarchy')}
+          >
+            <GitBranch className="h-4 w-4" />
+            Hierarchy
+          </button>
+        </div>
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {viewMode === 'hierarchy' ? (
+        <AgentHierarchyTree
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={setSelectedAgent}
+        />
+      ) : isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <div
