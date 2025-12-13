@@ -47,12 +47,16 @@ export function defineAbilitiesFor(user: JWTPayload): AppAbility {
       can('manage', 'AgentToolPermission');
       can('manage', 'Project');
       can('read', 'ToolDefinition');
+      can('read', 'AuditLog');
+      // Can read but not manage users or organization
       can('read', 'User');
       can('read', 'Organization');
-      can('read', 'AuditLog');
-      // Cannot manage users or organization
-      cannot('manage', 'User');
-      cannot('manage', 'Organization');
+      cannot('create', 'User');
+      cannot('update', 'User');
+      cannot('delete', 'User');
+      cannot('create', 'Organization');
+      cannot('update', 'Organization');
+      cannot('delete', 'Organization');
       break;
 
     case 'OPERATOR':

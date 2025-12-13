@@ -22,6 +22,7 @@ import { registerAuditMiddleware } from './middleware/audit.middleware.js';
 import { createWebSocketAuthMiddleware, getSocketUser, isAuthenticated } from './middleware/websocket-auth.middleware.js';
 import { getScheduler } from './services/scheduler.service.js';
 import { healthService } from './services/health.service.js';
+import { emailService } from './services/email.service.js';
 import { metrics } from './utils/metrics.js';
 import { circuitBreakers } from './utils/circuit-breaker.js';
 import { logger } from './utils/logger.js';
@@ -340,6 +341,10 @@ async function start() {
 
     // Register routes
     await registerRoutes();
+
+    // Initialize email service
+    emailService.initialize();
+    fastify.log.info('Email service initialized');
 
     // Initialize scheduler service (requires Redis)
     try {

@@ -4,6 +4,7 @@ import { prisma } from '../../index.js';
 import { validate } from '../../middleware/validation.middleware.js';
 import { rateLimitAuth } from '../../middleware/ratelimit.middleware.js';
 import { authSchemas } from '../../schemas/index.js';
+import { emailService } from '../../services/email.service.js';
 
 export async function emailVerificationRoutes(fastify: FastifyInstance) {
   // Verify email - complete verification
@@ -115,9 +116,11 @@ export async function emailVerificationRoutes(fastify: FastifyInstance) {
       },
     });
 
-    // TODO: Send email with verification link
-    // In production, integrate with email service (SendGrid, SES, etc.)
-    // The verification link would be: ${FRONTEND_URL}/verify-email?token=${verificationToken}
+    // Send email verification email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+    await emailService.sendEmailVerification(user.email, verificationToken, verifyUrl);
+
     fastify.log.info(`Email verification requested for ${user.email}. Token: ${verificationToken.substring(0, 8)}...`);
 
     return { message: 'Verification email sent' };
@@ -173,7 +176,11 @@ export async function emailVerificationRoutes(fastify: FastifyInstance) {
       },
     });
 
-    // TODO: Send email with verification link
+    // Send email verification email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
+    await emailService.sendEmailVerification(user.email, verificationToken, verifyUrl);
+
     fastify.log.info(`Email verification resent for ${user.email}. Token: ${verificationToken.substring(0, 8)}...`);
 
     return { message: 'If an account with that email exists and is not verified, a verification link has been sent' };

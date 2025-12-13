@@ -1,7 +1,12 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '../client';
-import type { ToolDefinition, ServerTool, AgentToolPermission } from '@mcp/types';
+import type { ToolDefinition, ServerTool, AgentToolPermission as BaseAgentToolPermission } from '@mcp/types';
 import { queryKeys, useQueryClient } from './common';
+
+// Extended type for frontend that includes the tool object
+export interface AgentToolPermission extends BaseAgentToolPermission {
+  tool: ToolDefinition;
+}
 
 // =====================================================
 // Tools Hooks

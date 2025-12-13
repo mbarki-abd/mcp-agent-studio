@@ -35,7 +35,7 @@ import {
 import { useAgentSubscription, useAgentStatus } from '../../../core/websocket';
 import { Can } from '../../../core/auth';
 import { cn } from '../../../lib/utils';
-import type { AgentRole, AgentStatusEvent } from '@mcp/types';
+import type { AgentRole, AgentStatusEvent, Agent, ServerConfiguration } from '@mcp/types';
 import { useCallback } from 'react';
 import { useAgentsStore } from '../stores/agents.store';
 
@@ -63,7 +63,7 @@ export default function AgentDetail() {
   // Get server info
   const { data: server } = useServer(agent?.serverId || '', {
     enabled: !!agent?.serverId,
-  });
+  }) as { data: ServerConfiguration | undefined };
 
   // Get supervisor info if exists
   const { data: supervisorData } = useAgent(agent?.supervisorId || '', {
@@ -75,7 +75,7 @@ export default function AgentDetail() {
     serverId: agent?.serverId,
   });
   const subordinates = subordinatesData?.items?.filter(
-    (a) => a.supervisorId === id
+    (a: Agent) => a.supervisorId === id
   ) || [];
 
   // Get recent tasks for this agent

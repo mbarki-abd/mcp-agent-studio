@@ -1,6 +1,7 @@
 import type { WebSocket } from '@fastify/websocket';
 import type { WebSocketClient, RealtimeEvent, ClientMessage } from './types.js';
 import { prisma } from '../index.js';
+import { logger } from '../utils/logger.js';
 
 class WebSocketManager {
   private clients: Map<WebSocket, WebSocketClient> = new Map();
@@ -18,7 +19,8 @@ class WebSocketManager {
       try {
         const message: ClientMessage = JSON.parse(rawMessage.toString());
         await this.handleMessage(ws, message);
-      } catch (error) {
+      } catch (err) {
+        logger.error({ err }, 'Invalid JSON from WebSocket client');
         ws.send(JSON.stringify({ error: 'Invalid message format' }));
       }
     });

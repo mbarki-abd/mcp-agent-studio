@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../index.js';
 import { getTenantContext, getOrganizationServerIds, getOrganizationUserIds } from '../utils/tenant.js';
+import { emailService } from '../services/email.service.js';
 
 const updateOrganizationSchema = z.object({
   name: z.string().min(2).max(100).optional(),
@@ -340,6 +341,18 @@ export async function organizationRoutes(fastify: FastifyInstance) {
       },
     });
 
+    // Get inviter and organization details for email
+    const [inviter, organization] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } }),
+      prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } }),
+    ]);
+
+    if (!inviter || !organization) {
+      return reply.status(500).send({ error: 'Failed to retrieve organization details' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
     if (existingInvitation && !existingInvitation.acceptedAt) {
       // Update existing invitation
       const token = crypto.randomBytes(32).toString('hex');
@@ -352,6 +365,15 @@ export async function organizationRoutes(fastify: FastifyInstance) {
           invitedById: userId,
         },
       });
+
+      // Send invitation email
+      const acceptUrl = `${frontendUrl}/accept-invitation?token=${token}`;
+      await emailService.sendInvitation(
+        updated.email,
+        organization.name,
+        inviter.name || inviter.email,
+        acceptUrl
+      );
 
       return {
         id: updated.id,
@@ -375,7 +397,14 @@ export async function organizationRoutes(fastify: FastifyInstance) {
       },
     });
 
-    // TODO: Send invitation email
+    // Send invitation email
+    const acceptUrl = `${frontendUrl}/accept-invitation?token=${token}`;
+    await emailService.sendInvitation(
+      invitation.email,
+      organization.name,
+      inviter.name || inviter.email,
+      acceptUrl
+    );
 
     return {
       id: invitation.id,

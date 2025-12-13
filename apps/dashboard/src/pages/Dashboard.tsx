@@ -83,7 +83,7 @@ export function DashboardHome() {
             </div>
           ) : activityData?.activities && activityData.activities.length > 0 ? (
             <div className="space-y-3 max-h-64 overflow-y-auto">
-              {activityData.activities.map((activity) => (
+              {activityData.activities.map((activity: DashboardActivity) => (
                 <ActivityItem key={activity.id} activity={activity} />
               ))}
             </div>
@@ -162,8 +162,8 @@ export function DashboardHome() {
                 </p>
                 <div className="space-y-2">
                   {health.servers.details
-                    .filter((s) => s.status !== 'healthy')
-                    .map((server) => (
+                    .filter((s: { status: string }) => s.status !== 'healthy')
+                    .map((server: { id: string; name: string; status: string }) => (
                       <div
                         key={server.id}
                         className="flex items-center justify-between text-sm p-2 rounded bg-muted"
@@ -322,8 +322,11 @@ function ActivityItem({ activity }: { activity: DashboardActivity }) {
   );
 }
 
+type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
+type HealthConfig = { label: string; bg: string; text: string; icon: React.ComponentType<{ className?: string }> };
+
 function HealthStatusBadge({ status }: { status: DashboardHealth['status'] }) {
-  const config = {
+  const config: Record<HealthStatus, HealthConfig> = {
     healthy: {
       label: 'All Systems Operational',
       bg: 'bg-green-100',
@@ -344,7 +347,7 @@ function HealthStatusBadge({ status }: { status: DashboardHealth['status'] }) {
     },
   };
 
-  const { label, bg, text, icon: Icon } = config[status];
+  const { label, bg, text, icon: Icon } = config[status as HealthStatus];
 
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${bg} ${text}`}>

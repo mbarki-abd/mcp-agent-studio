@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, ChevronDown, Bot, Users, Loader2 } from 'lucide-react';
 import { AgentStatusBadge } from './AgentStatusBadge';
 import { cn } from '../../../lib/utils';
-import { useAgentHierarchy, type AgentHierarchyNode } from '../../../core/api/hooks';
+import { useAgentHierarchy, type AgentHierarchyNode } from '../../../core/api/hooks/agents';
 import type { AgentRole, AgentStatus } from '@mcp/types';
 
 interface AgentHierarchyTreeProps {

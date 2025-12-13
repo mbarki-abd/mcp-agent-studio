@@ -11,7 +11,7 @@ import {
 import { ToolCard } from '../components/ToolCard';
 import { useToolsCatalog } from '../../../core/api';
 import { useToolsStore } from '../stores/tools.store';
-import type { ToolCategory } from '@mcp/types';
+import type { ToolCategory, ToolDefinition } from '@mcp/types';
 
 const categoryFilters: Array<{ value: ToolCategory | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'All Categories' },
@@ -37,7 +37,7 @@ export default function ToolsCatalog() {
 
   const filteredTools = useMemo(
     () =>
-      (tools || []).filter((tool) => {
+      (tools || []).filter((tool: ToolDefinition) => {
         // Category filter
         if (category !== 'ALL' && tool.category !== category) return false;
 
@@ -48,7 +48,7 @@ export default function ToolsCatalog() {
             tool.name.toLowerCase().includes(searchLower) ||
             tool.displayName.toLowerCase().includes(searchLower) ||
             tool.description?.toLowerCase().includes(searchLower) ||
-            (tool.tags as string[])?.some((t) => t.toLowerCase().includes(searchLower))
+            tool.tags?.some((t: string) => t.toLowerCase().includes(searchLower))
           );
         }
 
@@ -60,12 +60,12 @@ export default function ToolsCatalog() {
   // Group tools by category
   const groupedTools = useMemo(
     () =>
-      filteredTools.reduce((acc, tool) => {
+      filteredTools.reduce((acc: Record<ToolCategory, ToolDefinition[]>, tool: ToolDefinition) => {
         const cat = tool.category;
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(tool);
         return acc;
-      }, {} as Record<ToolCategory, typeof filteredTools>),
+      }, {} as Record<ToolCategory, ToolDefinition[]>),
     [filteredTools]
   );
 
@@ -162,7 +162,7 @@ export default function ToolsCatalog() {
                 {cat.toLowerCase().replace('_', ' ')}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {categoryTools.map((tool) => (
+                {(categoryTools as ToolDefinition[]).map((tool: ToolDefinition) => (
                   <ToolCard
                     key={tool.id}
                     tool={tool}
@@ -176,7 +176,7 @@ export default function ToolsCatalog() {
       ) : (
         // Flat view for single category
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredTools.map((tool) => (
+          {filteredTools.map((tool: ToolDefinition) => (
             <ToolCard
               key={tool.id}
               tool={tool}

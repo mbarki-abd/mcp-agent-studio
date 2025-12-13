@@ -427,8 +427,9 @@ export class MCPClient extends EventEmitter {
               } else if (data.type === 'error') {
                 error = data.message;
               }
-            } catch {
-              // Ignore parse errors for SSE
+            } catch (err) {
+              // Ignore parse errors for SSE (malformed chunks during streaming)
+              mcpLogger.debug({ err, line: line.slice(0, 100) }, 'Failed to parse SSE message');
             }
           }
         }
@@ -574,8 +575,9 @@ export class MCPClient extends EventEmitter {
         this.handleNotification(message as JsonRpcNotification);
       }
 
-    } catch (error) {
-      this.emit('error', new Error(`Failed to parse message: ${error}`));
+    } catch (err) {
+      mcpLogger.error({ err }, 'Invalid JSON from MCP server');
+      this.emit('error', new Error(`Failed to parse message: ${err instanceof Error ? err.message : 'Unknown error'}`));
     }
   }
 

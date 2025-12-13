@@ -91,11 +91,11 @@ export function useServers(params?: { page?: number; pageSize?: number }) {
   });
 }
 
-export function useServer(id: string, options?: any) {
+export function useServer(id: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.servers.detail(id),
     queryFn: () => apiClient.get<ServerConfiguration>(`/servers/${id}`),
-    enabled: !!id,
+    enabled: !!id && (options?.enabled ?? true),
     ...options,
   });
 }

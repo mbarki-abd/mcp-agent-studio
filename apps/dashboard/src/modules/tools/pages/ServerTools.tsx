@@ -22,7 +22,7 @@ import {
   useToolsCatalog,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
-import type { ToolStatus, HealthStatus } from '@mcp/types';
+import type { ToolStatus, HealthStatus, ServerTool, ToolDefinition } from '@mcp/types';
 
 const statusConfig: Record<ToolStatus, { label: string; icon: typeof CheckCircle; className: string }> = {
   NOT_INSTALLED: { label: 'Not Installed', icon: XCircle, className: 'text-gray-500' },
@@ -53,17 +53,20 @@ export default function ServerTools() {
 
   const isLoading = isLoadingServer || isLoadingTools;
 
+  // Define type for tool with definition
+  type ServerToolWithDefinition = ServerTool & { definition?: ToolDefinition };
+
   // Create a map of installed tools
   const installedToolIds = useMemo(
-    () => new Set(serverTools?.map((st) => st.toolId) || []),
+    () => new Set(serverTools?.map((st: ServerTool) => st.toolId) || []),
     [serverTools]
   );
 
   // Get tool definitions for installed tools
   const installedToolsWithDefinition = useMemo(
-    () =>
-      serverTools?.map((st) => {
-        const definition = catalog?.find((t) => t.id === st.toolId);
+    (): ServerToolWithDefinition[] =>
+      serverTools?.map((st: ServerTool) => {
+        const definition = catalog?.find((t: ToolDefinition) => t.id === st.toolId);
         return {
           ...st,
           definition,
@@ -75,7 +78,7 @@ export default function ServerTools() {
   // Filter tools
   const filteredTools = useMemo(
     () =>
-      installedToolsWithDefinition.filter((tool) => {
+      installedToolsWithDefinition.filter((tool: ServerToolWithDefinition) => {
         if (!search) return true;
         const searchLower = search.toLowerCase();
         return (
@@ -173,9 +176,9 @@ export default function ServerTools() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTools.map((tool) => {
-            const status = statusConfig[tool.status];
-            const health = healthConfig[tool.healthStatus];
+          {filteredTools.map((tool: ServerToolWithDefinition) => {
+            const status = statusConfig[tool.status as ToolStatus];
+            const health = healthConfig[tool.healthStatus as HealthStatus];
             const StatusIcon = status.icon;
 
             return (

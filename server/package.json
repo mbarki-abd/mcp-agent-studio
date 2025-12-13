@@ -44,6 +44,7 @@
     "fastify-plugin": "^4.5.0",
     "fastify-socket.io": "^5.1.0",
     "ioredis": "^5.8.2",
+    "nodemailer": "^7.0.11",
     "pino": "^8.17.0",
     "socket.io": "^4.8.1",
     "ws": "^8.18.3",
@@ -52,6 +53,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.0",
     "@types/node": "^20.10.0",
+    "@types/nodemailer": "^7.0.4",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^2.1.0",
     "eslint": "^8.56.0",

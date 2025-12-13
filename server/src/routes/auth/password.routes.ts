@@ -6,6 +6,7 @@ import { validate } from '../../middleware/validation.middleware.js';
 import { rateLimitAuth } from '../../middleware/ratelimit.middleware.js';
 import { authSchemas } from '../../schemas/index.js';
 import { COOKIE_ACCESS_TOKEN } from '../../utils/cookies.js';
+import { emailService } from '../../services/email.service.js';
 
 export async function passwordRoutes(fastify: FastifyInstance) {
   // Change password
@@ -122,9 +123,11 @@ export async function passwordRoutes(fastify: FastifyInstance) {
       },
     });
 
-    // TODO: Send email with reset link
-    // In production, integrate with email service (SendGrid, SES, etc.)
-    // The reset link would be: ${FRONTEND_URL}/reset-password?token=${resetToken}
+    // Send password reset email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+    await emailService.sendPasswordReset(user.email, resetToken, resetUrl);
+
     fastify.log.info(`Password reset requested for ${email}. Token: ${resetToken.substring(0, 8)}...`);
 
     return { message: 'If an account with that email exists, a reset link has been sent' };

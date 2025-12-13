@@ -19,6 +19,7 @@ import {
   useUpdateAgentToolPermissions,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
+import type { ToolDefinition } from '@mcp/types';
 
 interface PermissionState {
   toolId: string;
@@ -58,8 +59,9 @@ export default function AgentPermissions() {
   }, [currentPermissions, permissions.size]);
 
   // Get all tools with their permission status
-  const toolsWithPermissions = useMemo(() => {
-    return (catalog || []).map((tool) => {
+  type ToolWithPermission = ToolDefinition & { permission: PermissionState };
+  const toolsWithPermissions = useMemo((): ToolWithPermission[] => {
+    return (catalog || []).map((tool: ToolDefinition) => {
       const permission = permissions.get(tool.id) || currentPermissions?.find((p) => p.toolId === tool.id);
       return {
         ...tool,
@@ -147,7 +149,7 @@ export default function AgentPermissions() {
 
   const handleEnableAll = () => {
     const newPermissions = new Map<string, PermissionState>();
-    catalog?.forEach((tool) => {
+    catalog?.forEach((tool: ToolDefinition) => {
       newPermissions.set(tool.id, {
         toolId: tool.id,
         canUse: true,
@@ -160,7 +162,7 @@ export default function AgentPermissions() {
 
   const handleDisableAll = () => {
     const newPermissions = new Map<string, PermissionState>();
-    catalog?.forEach((tool) => {
+    catalog?.forEach((tool: ToolDefinition) => {
       newPermissions.set(tool.id, {
         toolId: tool.id,
         canUse: false,

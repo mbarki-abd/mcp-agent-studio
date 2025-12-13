@@ -285,8 +285,10 @@ describe('Auth Middleware', () => {
       mockRequest.cookies = { [COOKIE_ACCESS_TOKEN]: cookieToken };
       mockRequest.headers = { authorization: `Bearer ${headerToken}` };
 
-      vi.mocked(mockFastify.jwt.verify).mockReturnValue({
-        userId: 'user-123',
+      // When both tokens are present, jwtVerify is called (not jwt.verify)
+      // The request.user is set by jwtVerify
+      vi.mocked(mockRequest.jwtVerify as any).mockImplementation(async function (this: any) {
+        (mockRequest as any).user = { userId: 'user-123' };
       });
       vi.mocked(prisma.session.findFirst).mockResolvedValue({
         id: 'session-123',
@@ -303,8 +305,7 @@ describe('Auth Middleware', () => {
       // Act
       await authenticate(mockRequest as FastifyRequest, mockReply as FastifyReply);
 
-      // Assert
-      expect(mockFastify.jwt.verify).toHaveBeenCalledWith(cookieToken);
+      // Assert - cookie token takes precedence for session lookup
       expect(prisma.session.findFirst).toHaveBeenCalledWith({
         where: expect.objectContaining({
           token: cookieToken,

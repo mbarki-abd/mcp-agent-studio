@@ -42,7 +42,8 @@ import {
 import { useAgentSubscription, useAgentStatus } from '../../../core/websocket';
 import { Can } from '../../../core/auth';
 import { cn } from '../../../lib/utils';
-import type { AgentRole, AgentStatusEvent, Task } from '@mcp/types';
+import type { AgentRole, AgentStatusEvent, Task, Agent, ServerConfiguration, ToolDefinition } from '@mcp/types';
+import type { AgentToolPermission } from '../../../core/api';
 import { useChatStore } from '../../chat/stores/chat.store';
 
 const roleIcons: Record<AgentRole, typeof Bot> = {
@@ -71,7 +72,7 @@ export default function AgentDashboard() {
   // Get server info
   const { data: server } = useServer(agent?.serverId || '', {
     enabled: !!agent?.serverId,
-  });
+  }) as { data: ServerConfiguration | undefined };
 
   // Get supervisor info
   const { data: supervisorData } = useAgent(agent?.supervisorId || '', {
@@ -83,7 +84,7 @@ export default function AgentDashboard() {
     serverId: agent?.serverId,
   });
   const subordinates = subordinatesData?.items?.filter(
-    (a) => a.supervisorId === id
+    (a: Agent) => a.supervisorId === id
   ) || [];
 
   // Get ALL tasks for this agent
@@ -295,7 +296,7 @@ export default function AgentDashboard() {
           </div>
           <p className="text-2xl font-bold">{subordinates.length}</p>
           <p className="text-xs text-muted-foreground">
-            {subordinates.filter(s => s.status === 'ACTIVE').length} active
+            {subordinates.filter((s: Agent) => s.status === 'ACTIVE').length} active
           </p>
         </div>
       </div>
@@ -360,10 +361,10 @@ export default function AgentDashboard() {
 
 // Overview Tab Component
 function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
-  agent: any;
-  server: any;
-  supervisorData: any;
-  subordinates: any[];
+  agent: Agent;
+  server: ServerConfiguration | undefined;
+  supervisorData: Agent | undefined;
+  subordinates: Agent[];
   tasks: Task[];
 }) {
   const recentTasks = tasks.slice(0, 5);
@@ -395,7 +396,7 @@ function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Max Concurrent Tasks</p>
-              <p className="font-medium">{agent.maxConcurrentTasks || 5}</p>
+              <p className="font-medium">{(agent as any).maxConcurrentTasks || 5}</p>
             </div>
           </div>
 
@@ -417,11 +418,11 @@ function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
           )}
 
           {/* System Prompt */}
-          {agent.systemPrompt && (
+          {(agent as any).systemPrompt && (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">System Prompt</p>
               <div className="p-3 rounded-lg bg-muted text-sm font-mono whitespace-pre-wrap">
-                {agent.systemPrompt}
+                {(agent as any).systemPrompt}
               </div>
             </div>
           )}
@@ -547,10 +548,10 @@ function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
                 <span>{new Date(agent.validatedAt).toLocaleDateString()}</span>
               </div>
             )}
-            {agent.lastActiveAt && (
+            {(agent as any).lastActiveAt && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Last Active</span>
-                <span>{new Date(agent.lastActiveAt).toLocaleString()}</span>
+                <span>{new Date((agent as any).lastActiveAt).toLocaleString()}</span>
               </div>
             )}
           </div>
@@ -565,7 +566,7 @@ function TasksTab({ tasks, agentId }: { tasks: Task[]; agentId: string }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('all');
 
-  const filteredTasks = tasks.filter((t) => {
+  const filteredTasks = tasks.filter((t: Task) => {
     if (filter === 'all') return true;
     return t.status === filter;
   });
@@ -648,15 +649,15 @@ function TasksTab({ tasks, agentId }: { tasks: Task[]; agentId: string }) {
 
 // Tools Tab Component
 function ToolsTab({ permissions, allTools, agentId }: {
-  permissions: any[];
-  allTools: any[];
+  permissions: AgentToolPermission[];
+  allTools: ToolDefinition[];
   agentId: string;
 }) {
   const navigate = useNavigate();
-  const permittedToolIds = new Set(permissions.map((p) => p.tool.id));
+  const permittedToolIds = new Set(permissions.map((p: AgentToolPermission) => p.tool.id));
 
   // Group tools by category
-  const toolsByCategory = allTools.reduce((acc: Record<string, any[]>, tool) => {
+  const toolsByCategory = allTools.reduce((acc: Record<string, (ToolDefinition & { hasPermission: boolean; permission?: AgentToolPermission })[]>, tool: ToolDefinition) => {
     const cat = tool.category || 'UTILITY';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push({
@@ -732,7 +733,7 @@ function ToolsTab({ permissions, allTools, agentId }: {
 
 // Chat Tab Component
 function ChatTab({ messages, agentId, agentName }: {
-  messages: any[];
+  messages: Array<{ id: string; role: string; content: string; timestamp: string | Date }>;
   agentId: string;
   agentName: string;
 }) {
