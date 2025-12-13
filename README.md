@@ -183,6 +183,34 @@ REFRESH_TOKEN_EXPIRES_IN="7d"
 PORT=3000
 ```
 
+## Deployment
+
+### Production Deployment
+
+Deploy to production with automated CI/CD:
+
+```bash
+# Quick start (60 minutes total)
+# See DEPLOYMENT-QUICKSTART.md for detailed steps
+
+# 1. Provision Hetzner server (10 min)
+# 2. Configure secrets (5 min)
+# 3. Configure DNS (2 min)
+# 4. Deploy (auto on push to master)
+
+# For full guide:
+cat DEPLOYMENT-QUICKSTART.md
+```
+
+**Documentation:**
+- [Quick Start Guide](DEPLOYMENT-QUICKSTART.md) - 7-step deployment guide
+- [GitHub Configuration](docs/runbooks/GITHUB-DEPLOYMENT-SETUP.md) - Complete setup guide
+- [Deployment Manual](docs/runbooks/deployment.md) - Manual deployment instructions
+
+**Production URLs:**
+- Dashboard: https://mcp-studio.ilinqsoft.com
+- API: https://api.mcp-studio.ilinqsoft.com
+
 ## Documentation
 
 - [Architecture Overview](docs/architecture/README.md)

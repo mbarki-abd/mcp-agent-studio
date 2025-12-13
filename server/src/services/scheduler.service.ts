@@ -3,12 +3,33 @@ import { prisma } from '../index.js';
 import { MonitoringService } from './monitoring.service.js';
 import { getMasterAgentService, MasterAgentService } from './master-agent.service.js';
 
-// Redis connection config
-const redisConnection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-  password: process.env.REDIS_PASSWORD || undefined,
-};
+// Redis connection config parser
+function getRedisConnection() {
+  const redisUrl = process.env.REDIS_URL;
+
+  // Try to parse REDIS_URL first
+  if (redisUrl) {
+    try {
+      const url = new URL(redisUrl);
+      return {
+        host: url.hostname,
+        port: parseInt(url.port || '6379', 10),
+        password: url.password || undefined,
+      };
+    } catch (error) {
+      console.warn('Failed to parse REDIS_URL, falling back to REDIS_HOST/PORT', error);
+    }
+  }
+
+  // Fallback to individual env vars
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+  };
+}
+
+const redisConnection = getRedisConnection();
 
 // Queue names
 const TASK_QUEUE = 'task-execution';
