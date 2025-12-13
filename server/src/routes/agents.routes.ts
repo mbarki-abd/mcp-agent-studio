@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../index.js';
 import { getTenantContext, getOrganizationServerIds } from '../utils/tenant.js';
+import { Prisma } from '@prisma/client';
 import {
   parsePagination,
   buildPaginatedResponse,
@@ -78,11 +79,15 @@ export async function agentRoutes(fastify: FastifyInstance) {
     const orgServerIds = await getOrganizationServerIds(organizationId);
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.AgentWhereInput = {
       serverId: query.serverId || { in: orgServerIds },
-      ...(query.status && { status: query.status as any }),
-      ...(query.role && { role: query.role as any }),
     };
+    if (query.status) {
+      where.status = query.status as any;
+    }
+    if (query.role) {
+      where.role = query.role as any;
+    }
 
     if (query.search) {
       where.OR = [
@@ -396,7 +401,8 @@ export async function agentRoutes(fastify: FastifyInstance) {
     });
 
     // Build hierarchy tree
-    const buildTree = (parentId: string | null): any[] => {
+    type AgentNode = typeof agents[0] & { children: AgentNode[] };
+    const buildTree = (parentId: string | null): AgentNode[] => {
       return agents
         .filter((a) => a.supervisorId === parentId)
         .map((a) => ({
@@ -448,10 +454,12 @@ export async function agentRoutes(fastify: FastifyInstance) {
     }
 
     // Build where clause
-    const where = {
+    const where: Prisma.TaskExecutionWhereInput = {
       agentId: id,
-      ...(query.status && { status: query.status as any }),
     };
+    if (query.status) {
+      where.status = query.status as any;
+    }
 
     // Get executions with pagination
     const [executions, total] = await Promise.all([

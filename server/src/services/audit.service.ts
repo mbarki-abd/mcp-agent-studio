@@ -9,6 +9,7 @@
 import { AuditAction, AuditStatus, Prisma } from '@prisma/client';
 import { prisma } from '../index.js';
 import crypto from 'crypto';
+import { auditLogger } from '../utils/logger.js';
 
 // Secret key for HMAC (in production, use env variable)
 const AUDIT_INTEGRITY_SECRET = process.env.AUDIT_INTEGRITY_SECRET || 'audit-integrity-secret-change-in-production';
@@ -139,8 +140,8 @@ class AuditService {
         },
       });
     } catch (error) {
-      // Log to console but don't throw - audit should not break the app
-      console.error('[Audit] Failed to write audit log:', error);
+      // Log but don't throw - audit should not break the app
+      auditLogger.error({ err: error }, 'Failed to write audit log');
     }
   }
 

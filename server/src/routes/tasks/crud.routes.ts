@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../index.js';
 import { getTenantContext, getOrganizationUserIds } from '../../utils/tenant.js';
+import { Prisma, TaskStatus } from '@prisma/client';
 import {
   parsePagination,
   buildPaginatedResponse,
@@ -89,14 +90,24 @@ export async function taskCrudRoutes(fastify: FastifyInstance) {
     const orgUserIds = await getOrganizationUserIds(organizationId);
 
     // Build where clause
-    const where: any = {
+    const where: Prisma.TaskWhereInput = {
       createdById: { in: orgUserIds },
-      ...(query.status && { status: query.status as any }),
-      ...(query.priority && { priority: query.priority as any }),
-      ...(query.agentId && { agentId: query.agentId }),
-      ...(query.serverId && { serverId: query.serverId }),
-      ...(query.executionMode && { executionMode: query.executionMode as any }),
     };
+    if (query.status) {
+      where.status = query.status as any;
+    }
+    if (query.priority) {
+      where.priority = query.priority as any;
+    }
+    if (query.agentId) {
+      where.agentId = query.agentId;
+    }
+    if (query.serverId) {
+      where.serverId = query.serverId;
+    }
+    if (query.executionMode) {
+      where.executionMode = query.executionMode as any;
+    }
 
     if (query.search) {
       where.OR = [
@@ -155,7 +166,7 @@ export async function taskCrudRoutes(fastify: FastifyInstance) {
     const body = createTaskSchema.parse(request.body);
 
     // Determine initial status
-    let status: any = 'DRAFT';
+    let status: TaskStatus = 'DRAFT';
     if (body.executionMode === 'IMMEDIATE') {
       status = 'PENDING';
     } else if (body.executionMode === 'SCHEDULED' || body.executionMode === 'RECURRING') {

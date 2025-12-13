@@ -342,6 +342,8 @@ model Task {
   @@index([createdById])
   @@index([createdAt])
   @@index([executionMode])
+  @@index([status, agentId])
+  @@index([status, nextRunAt])
   @@map("tasks")
 }
 
@@ -426,6 +428,7 @@ model TaskExecution {
   @@index([status])
   @@index([startedAt])
   @@index([completedAt])
+  @@index([agentId, status])
   @@map("task_executions")
 }
 

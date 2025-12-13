@@ -322,6 +322,9 @@ export class ToolInstallationService {
       include: { tool: true },
     });
 
+    // Collect all updates to batch them in a single transaction
+    const updates: Array<{ id: string; healthStatus: HealthStatus; lastHealthCheck: Date }> = [];
+
     for (const serverTool of serverTools) {
       const startTime = Date.now();
 
@@ -330,38 +333,53 @@ export class ToolInstallationService {
         const responseTime = Date.now() - startTime;
 
         const healthStatus: HealthStatus = verification.installed ? 'HEALTHY' : 'UNHEALTHY';
+        const lastHealthCheck = new Date();
 
-        await prisma.serverTool.update({
-          where: { id: serverTool.id },
-          data: {
-            healthStatus,
-            lastHealthCheck: new Date(),
-          },
+        // Collect update data
+        updates.push({
+          id: serverTool.id,
+          healthStatus,
+          lastHealthCheck,
         });
 
         results.set(serverTool.tool.name, {
           status: healthStatus,
           responseTime,
-          lastCheck: new Date(),
+          lastCheck: lastHealthCheck,
         });
       } catch (error) {
         const responseTime = Date.now() - startTime;
+        const lastHealthCheck = new Date();
 
-        await prisma.serverTool.update({
-          where: { id: serverTool.id },
-          data: {
-            healthStatus: 'UNHEALTHY',
-            lastHealthCheck: new Date(),
-          },
+        // Collect update data
+        updates.push({
+          id: serverTool.id,
+          healthStatus: 'UNHEALTHY',
+          lastHealthCheck,
         });
 
         results.set(serverTool.tool.name, {
           status: 'UNHEALTHY',
           message: error instanceof Error ? error.message : 'Unknown error',
           responseTime,
-          lastCheck: new Date(),
+          lastCheck: lastHealthCheck,
         });
       }
+    }
+
+    // Batch all updates in a single transaction to avoid N+1 queries
+    if (updates.length > 0) {
+      await prisma.$transaction(
+        updates.map((update) =>
+          prisma.serverTool.update({
+            where: { id: update.id },
+            data: {
+              healthStatus: update.healthStatus,
+              lastHealthCheck: update.lastHealthCheck,
+            },
+          })
+        )
+      );
     }
 
     return results;

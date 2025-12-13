@@ -3,6 +3,7 @@ import { MonitoringService } from './monitoring.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { MCPClient, getMCPClient, removeMCPClient } from './mcp-client.js';
 import type { Agent, ServerConfiguration } from '@prisma/client';
+import { masterAgentLogger } from '../utils/logger.js';
 
 // Types for execution
 interface ExecutionResult {
@@ -85,10 +86,10 @@ export class MasterAgentService {
 
         // Try to connect (non-blocking, will reconnect if fails)
         this.mcpClient.connect().catch((err) => {
-          console.warn(`MCP connection failed for server ${this.serverId}:`, err.message);
+          masterAgentLogger.warn({ err, serverId: this.serverId }, 'MCP connection failed');
         });
       } catch (err) {
-        console.warn(`Failed to initialize MCP client for server ${this.serverId}:`, err);
+        masterAgentLogger.warn({ err, serverId: this.serverId }, 'Failed to initialize MCP client');
       }
     }
   }
@@ -207,7 +208,7 @@ export class MasterAgentService {
           tokensUsed: result.tokensUsed,
         };
       } catch (err) {
-        console.warn('MCP execution failed, falling back to HTTP:', err);
+        masterAgentLogger.warn({ err }, 'MCP execution failed, falling back to HTTP');
       }
     }
 
@@ -233,9 +234,9 @@ export class MasterAgentService {
             tokensUsed: result.tokensUsed,
           };
         }
-        console.warn('HTTP execution failed:', result.error);
+        masterAgentLogger.warn({ error: result.error }, 'HTTP execution failed');
       } catch (err) {
-        console.warn('HTTP execution failed:', err);
+        masterAgentLogger.warn({ err }, 'HTTP execution failed');
       }
     }
 
@@ -331,9 +332,9 @@ export class MasterAgentService {
           supervisorId: params.supervisorId || this.masterAgent?.id,
         });
 
-        console.log(`Agent ${uniqueName} provisioned on MCP server`);
+        masterAgentLogger.info({ agentName: uniqueName }, 'Agent provisioned on MCP server');
       } catch (err) {
-        console.warn(`Failed to provision agent on MCP server:`, err);
+        masterAgentLogger.warn({ err }, 'Failed to provision agent on MCP server');
         // Agent is still created in DB, can be provisioned later during validation
       }
     }
@@ -348,9 +349,9 @@ export class MasterAgentService {
         await this.mcpClient.callTool('activate_agent', {
           agentId,
         });
-        console.log(`Agent ${agentId} activated on MCP server`);
+        masterAgentLogger.info({ agentId }, 'Agent activated on MCP server');
       } catch (err) {
-        console.warn(`Failed to activate agent on MCP server:`, err);
+        masterAgentLogger.warn({ err, agentId }, 'Failed to activate agent on MCP server');
         // Continue with database update
       }
     }

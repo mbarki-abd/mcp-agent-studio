@@ -24,6 +24,7 @@ import { getScheduler } from './services/scheduler.service.js';
 import { healthService } from './services/health.service.js';
 import { metrics } from './utils/metrics.js';
 import { circuitBreakers } from './utils/circuit-breaker.js';
+import { logger } from './utils/logger.js';
 
 // Environment configuration with validation
 const isProduction = process.env.NODE_ENV === 'production';
@@ -34,7 +35,7 @@ function getCookieSecret(): string {
     throw new Error('COOKIE_SECRET environment variable is required in production');
   }
   if (!secret) {
-    console.warn('⚠️  WARNING: Using default cookie secret. Set COOKIE_SECRET in production!');
+    logger.warn('⚠️  WARNING: Using default cookie secret. Set COOKIE_SECRET in production!');
     return 'dev-cookie-secret-change-in-production-32chars';
   }
   return secret;
@@ -46,7 +47,7 @@ function getJwtSecret(): string {
     throw new Error('JWT_SECRET environment variable is required in production');
   }
   if (!secret) {
-    console.warn('⚠️  WARNING: Using default JWT secret. Set JWT_SECRET in production!');
+    logger.warn('⚠️  WARNING: Using default JWT secret. Set JWT_SECRET in production!');
     return 'dev-secret-change-in-production';
   }
   return secret;
@@ -275,7 +276,7 @@ fastify.get('/api/circuit-breakers', async () => {
 // Import and register routes
 async function registerRoutes() {
   // Auth routes
-  const { authRoutes } = await import('./routes/auth.routes.js');
+  const { authRoutes } = await import('./routes/auth/index.js');
   await fastify.register(authRoutes, { prefix: '/api/auth' });
 
   // Server configuration routes

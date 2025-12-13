@@ -13,6 +13,7 @@ import { getMasterAgentService } from './master-agent.service.js';
 import { MonitoringService } from './monitoring.service.js';
 import { getScheduler } from './scheduler.service.js';
 import type { Task, TaskExecution, Agent, ExecutionStatus } from '@prisma/client';
+import { taskLogger } from '../utils/logger.js';
 
 export interface ExecutionCallbacks {
   onStart?: (executionId: string) => void;
@@ -609,7 +610,7 @@ export class TaskExecutionService {
         );
       }
     } catch (error) {
-      console.warn('Failed to schedule next run:', error);
+      taskLogger.warn({ err: error }, 'Failed to schedule next run');
     }
   }
 
@@ -680,7 +681,7 @@ export class TaskExecutionService {
         if (canExecute) {
           // Auto-trigger execution
           this.executeTask(depTask.id, userId).catch((err) => {
-            console.warn(`Failed to auto-trigger dependent task ${depTask.id}:`, err);
+            taskLogger.warn({ err, taskId: depTask.id }, 'Failed to auto-trigger dependent task');
           });
         }
       }

@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import { prisma } from '../index.js';
 import { MonitoringService } from './monitoring.service.js';
 import { getMasterAgentService, MasterAgentService } from './master-agent.service.js';
+import { schedulerLogger } from '../utils/logger.js';
 
 // Redis connection config parser
 function getRedisConnection() {
@@ -17,7 +18,7 @@ function getRedisConnection() {
         password: url.password || undefined,
       };
     } catch (error) {
-      console.warn('Failed to parse REDIS_URL, falling back to REDIS_HOST/PORT', error);
+      schedulerLogger.warn({ err: error }, 'Failed to parse REDIS_URL, falling back to REDIS_HOST/PORT');
     }
   }
 
@@ -79,18 +80,18 @@ export class SchedulerService {
 
     // Worker event handlers
     this.worker.on('completed', (job) => {
-      console.log(`Job ${job.id} completed for task ${job.data.taskId}`);
+      schedulerLogger.info({ jobId: job.id, taskId: job.data.taskId }, 'Job completed');
     });
 
     this.worker.on('failed', (job, err) => {
-      console.error(`Job ${job?.id} failed:`, err.message);
+      schedulerLogger.error({ jobId: job?.id, err }, 'Job failed');
     });
 
     // Restore scheduled tasks from database
     await this.restoreScheduledTasks();
 
     this.isInitialized = true;
-    console.log('Scheduler service initialized');
+    schedulerLogger.info('Scheduler service initialized');
   }
 
   private async processTask(job: Job<TaskJobData>): Promise<void> {
@@ -396,7 +397,7 @@ export class SchedulerService {
       }
     }
 
-    console.log(`Restored ${scheduledTasks.length} scheduled tasks`);
+    schedulerLogger.info({ count: scheduledTasks.length }, 'Restored scheduled tasks');
   }
 
   async shutdown(): Promise<void> {

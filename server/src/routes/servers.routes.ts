@@ -5,6 +5,7 @@ import { getTenantContext, getOrganizationUserIds } from '../utils/tenant.js';
 import { validate } from '../middleware/validation.middleware.js';
 import { serverSchemas, uuidParam } from '../schemas/index.js';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import {
   parsePagination,
   buildPaginatedResponse,
@@ -64,9 +65,9 @@ export async function serverRoutes(fastify: FastifyInstance) {
     const orgUserIds = await getOrganizationUserIds(organizationId);
 
     // Build where clause with filters
-    const where: any = { userId: { in: orgUserIds } };
+    const where: Prisma.ServerConfigurationWhereInput = { userId: { in: orgUserIds } };
     if (query.status) {
-      where.status = query.status;
+      where.status = query.status as any;
     }
     if (query.search) {
       where.OR = [

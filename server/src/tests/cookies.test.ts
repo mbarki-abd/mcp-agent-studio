@@ -95,7 +95,7 @@ describe('Cookie Utils', () => {
       setAuthCookies(mockReply as FastifyReply, 'access', 'refresh');
 
       // Assert
-      const accessTokenCall = vi.mocked(mockReply.setCookie).mock.calls.find(
+      const accessTokenCall = vi.mocked(mockReply.setCookie!).mock.calls.find(
         call => call[0] === COOKIE_ACCESS_TOKEN
       );
       expect(accessTokenCall?.[2]).toEqual(ACCESS_TOKEN_COOKIE_OPTIONS);
@@ -106,7 +106,7 @@ describe('Cookie Utils', () => {
       setAuthCookies(mockReply as FastifyReply, 'access', 'refresh');
 
       // Assert
-      const refreshTokenCall = vi.mocked(mockReply.setCookie).mock.calls.find(
+      const refreshTokenCall = vi.mocked(mockReply.setCookie!).mock.calls.find(
         call => call[0] === COOKIE_REFRESH_TOKEN
       );
       expect(refreshTokenCall?.[2]).toEqual(REFRESH_TOKEN_COOKIE_OPTIONS);
@@ -117,10 +117,10 @@ describe('Cookie Utils', () => {
       setAuthCookies(mockReply as FastifyReply, 'access', 'refresh');
 
       // Assert
-      const calls = vi.mocked(mockReply.setCookie).mock.calls;
+      const calls = vi.mocked(mockReply.setCookie!).mock.calls;
       calls.forEach(call => {
         const options = call[2];
-        expect(options.httpOnly).toBe(true);
+        expect(options?.httpOnly).toBe(true);
       });
     });
 
@@ -129,10 +129,10 @@ describe('Cookie Utils', () => {
       setAuthCookies(mockReply as FastifyReply, 'access', 'refresh');
 
       // Assert
-      const calls = vi.mocked(mockReply.setCookie).mock.calls;
+      const calls = vi.mocked(mockReply.setCookie!).mock.calls;
       calls.forEach(call => {
         const options = call[2];
-        expect(options.sameSite).toBe('strict');
+        expect(options?.sameSite).toBe('strict');
       });
     });
   });
@@ -155,7 +155,7 @@ describe('Cookie Utils', () => {
       clearAuthCookies(mockReply as FastifyReply);
 
       // Assert
-      const accessTokenCall = vi.mocked(mockReply.clearCookie).mock.calls.find(
+      const accessTokenCall = vi.mocked(mockReply.clearCookie!).mock.calls.find(
         call => call[0] === COOKIE_ACCESS_TOKEN
       );
       expect(accessTokenCall?.[1]).toEqual({ path: '/' });
@@ -166,7 +166,7 @@ describe('Cookie Utils', () => {
       clearAuthCookies(mockReply as FastifyReply);
 
       // Assert
-      const refreshTokenCall = vi.mocked(mockReply.clearCookie).mock.calls.find(
+      const refreshTokenCall = vi.mocked(mockReply.clearCookie!).mock.calls.find(
         call => call[0] === COOKIE_REFRESH_TOKEN
       );
       expect(refreshTokenCall?.[1]).toEqual({ path: '/api/auth/refresh' });

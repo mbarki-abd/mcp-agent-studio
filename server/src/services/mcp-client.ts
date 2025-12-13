@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
+import { mcpLogger } from '../utils/logger.js';
 
 // JSON-RPC types
 interface JsonRpcRequest {
@@ -112,7 +113,7 @@ export class MCPClient extends EventEmitter {
     };
     // Add default error handler to prevent unhandled 'error' events from crashing the process
     this.on('error', (err) => {
-      console.error(`[MCPClient] Connection error for ${this.options.serverUrl}:`, err.message);
+      mcpLogger.error({ err, serverUrl: this.options.serverUrl }, 'MCP connection error');
     });
   }
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../index.js';
 import { getToolInstallationService } from '../services/tool-installation.service.js';
 import { getTenantContext, getOrganizationUserIds, getOrganizationServerIds } from '../utils/tenant.js';
+import { Prisma, ToolCategory } from '@prisma/client';
 import {
   parsePagination,
   buildPaginatedResponse,
@@ -68,7 +69,7 @@ export async function toolRoutes(fastify: FastifyInstance) {
     const validSortBy = validateSortField(pagination.sortBy, TOOL_SORT_FIELDS);
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.ToolDefinitionWhereInput = {};
     if (query.category) {
       where.category = query.category as any;
     }
@@ -439,7 +440,15 @@ export async function toolRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'Admin only' });
     }
 
-    const defaultTools = [
+    const defaultTools: Array<{
+      name: string;
+      displayName: string;
+      category: ToolCategory;
+      installCommand: string;
+      versionCommand: string;
+      description: string;
+      requiresSudo?: boolean;
+    }> = [
       { name: 'git', displayName: 'Git', category: 'VERSION_CONTROL', installCommand: 'apt-get install -y git', versionCommand: 'git --version', description: 'Distributed version control system' },
       { name: 'docker', displayName: 'Docker', category: 'CONTAINER', installCommand: 'curl -fsSL https://get.docker.com | sh', versionCommand: 'docker --version', description: 'Container runtime', requiresSudo: true },
       { name: 'node', displayName: 'Node.js', category: 'LANGUAGE_RUNTIME', installCommand: 'curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs', versionCommand: 'node --version', description: 'JavaScript runtime' },
@@ -457,7 +466,7 @@ export async function toolRoutes(fastify: FastifyInstance) {
         where: { name: tool.name },
         create: {
           ...tool,
-          category: tool.category as any,
+          category: tool.category,
           requiresSudo: tool.requiresSudo ?? true,
           dependencies: [],
           tags: [],
