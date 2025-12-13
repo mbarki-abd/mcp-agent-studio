@@ -62,6 +62,11 @@ export const queryKeys = {
     usage: (keyId: string) => ['apiKeys', keyId, 'usage'] as const,
     orgAll: ['apiKeys', 'org'] as const,
   },
+  terminals: {
+    all: ['terminals'] as const,
+    session: (sessionId: string) => ['terminals', 'session', sessionId] as const,
+    buffer: (sessionId: string) => ['terminals', sessionId, 'buffer'] as const,
+  },
 };
 
 export const queryKeysBilling = {

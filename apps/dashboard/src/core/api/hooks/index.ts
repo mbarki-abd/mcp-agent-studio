@@ -204,3 +204,162 @@ export type {
   MasterConnectionState,
   PresenceStatus,
 } from './presence';
+
+// Token hooks
+export {
+  useTokens,
+  useToken,
+  useCreateToken,
+  useDeleteToken,
+  useRevokeToken,
+  tokensQueryKeys,
+} from './tokens';
+export type {
+  Token,
+  CreateTokenRequest,
+  CreateTokenResponse,
+  RevokeTokenResponse,
+  DeleteTokenResponse,
+} from './tokens';
+
+// Workspaces hooks
+export {
+  useWorkspaces,
+  useWorkspace,
+  useWorkspaceStats,
+  useCreateWorkspace,
+  useUpdateWorkspace,
+  useDeleteWorkspace,
+  workspacesQueryKeys,
+} from './workspaces';
+export type {
+  WorkspaceType,
+  Workspace,
+  WorkspaceSettings,
+  CreateWorkspaceRequest,
+  UpdateWorkspaceRequest,
+  WorkspaceStats,
+} from './workspaces';
+
+// Projects hooks
+export {
+  useProjects,
+  useProject,
+  useWorkspaceProjects,
+  useSearchProjects,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  projectsQueryKeys,
+} from './projects';
+export type {
+  Project,
+  ProjectType,
+  ProjectStatus,
+  ProjectStats,
+  ProjectSettings,
+  CreateProjectRequest,
+  UpdateProjectRequest,
+  ProjectFilters,
+} from './projects';
+
+// Filesystem hooks
+export {
+  useDirectoryListing,
+  useFileTree,
+  useFileContent,
+  useSearchFiles,
+  useWriteFile,
+  useCreateDirectory,
+  useDeletePath,
+  useRenamePath,
+  useCopyPath,
+  filesystemQueryKeys,
+} from './filesystem';
+export type {
+  FileType,
+  FileEntry,
+  DirectoryListing,
+  FileTreeNode,
+  FileContent,
+  WriteFileRequest,
+  RenameRequest,
+  CopyRequest,
+  SearchResult,
+  DirectoryListingOptions,
+  FileTreeOptions,
+  SearchOptions,
+} from './filesystem';
+
+// Credentials hooks
+export {
+  useCredentials,
+  useSearchCredentials,
+  useCredential,
+  useCredentialValue,
+  useCredentialAudit,
+  useCreateCredential,
+  useUpdateCredential,
+  useDeleteCredential,
+  useShareCredential,
+  useUnshareCredential,
+  credentialsQueryKeys,
+} from './credentials';
+export type {
+  CredentialType,
+  CredentialVisibility,
+  Credential,
+  CreateCredentialRequest,
+  UpdateCredentialRequest,
+  CredentialValue,
+  CredentialAuditEntry,
+  ShareCredentialRequest,
+  ShareCredentialResponse,
+  UnshareCredentialResponse,
+} from './credentials';
+
+// Terminal hooks
+export {
+  useTerminalSessions,
+  useCreateTerminalSession,
+  useExecuteCommand,
+  useStartShell,
+  useSendTerminalInput,
+  useKillProcess,
+  useCloseTerminal,
+  useTerminalBuffer,
+  useTerminalWebSocket,
+} from './terminal';
+export type {
+  TerminalSession,
+  CreateTerminalResponse,
+  ExecuteCommandRequest,
+  TerminalOutput,
+  TerminalBuffer,
+  TerminalInputMessage,
+  TerminalExecuteMessage,
+  TerminalKillMessage,
+  TerminalResizeMessage,
+  TerminalClientMessage,
+} from './terminal';
+
+// Messages hooks (Claude Messages API)
+export {
+  useSendMessage,
+  useSendMessageStreaming,
+  useAvailableModels,
+} from './messages';
+export type {
+  MessageRole,
+  ContentBlockType,
+  TextContent,
+  ToolUseContent,
+  ToolResultContent,
+  ContentBlock,
+  Message,
+  ToolDefinition,
+  SendMessageRequest,
+  MessageResponse,
+  StreamEvent,
+  ModelInfo,
+} from './messages';
