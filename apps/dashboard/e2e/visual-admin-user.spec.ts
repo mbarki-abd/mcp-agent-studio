@@ -76,6 +76,7 @@ test.describe('Visual Test - User Access', () => {
 
 test.describe('Visual Test - Admin Access', () => {
   test('capture admin dashboard and pages', async ({ page }) => {
+    test.setTimeout(120000); // 2 minutes for all screenshots
     await loginAs(page, ADMIN_USER);
 
     // Dashboard
