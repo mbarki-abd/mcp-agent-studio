@@ -16,12 +16,15 @@ export interface RateLimitConfig {
   skipFailedRequests?: boolean;      // Don't count failed requests
 }
 
+// Check if we're in development/test mode (relaxed limits for testing)
+const isDev = process.env.NODE_ENV !== 'production';
+
 // Default configurations for different endpoint types
 export const rateLimitPresets = {
-  // Auth endpoints - stricter limits to prevent brute force
+  // Auth endpoints - stricter limits in prod, relaxed in dev for testing
   auth: {
-    max: 5,
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: isDev ? 100 : 5,
+    windowMs: isDev ? 60 * 1000 : 15 * 60 * 1000, // 1 min dev, 15 min prod
     message: 'Too many authentication attempts, please try again later',
   },
   // Standard API endpoints
