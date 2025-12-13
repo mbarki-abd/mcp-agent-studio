@@ -68,6 +68,44 @@ export function WebSocketProvider({ children, isAuthenticated = false }: WebSock
   const subscriptions = useRef<Set<string>>(new Set());
   const chatSubscriptions = useRef<Set<string>>(new Set());
 
+  // Memoized event handlers to prevent re-registration on each render
+  const handleConnect = useCallback(() => {
+    setIsConnected(true);
+    // Re-subscribe to all previous subscriptions
+    subscriptions.current.forEach(sub => {
+      const [type, id] = sub.split(':');
+      socketRef.current?.emit(`subscribe:${type}`, { id });
+    });
+  }, []);
+
+  const handleDisconnect = useCallback(() => {
+    setIsConnected(false);
+  }, []);
+
+  const handleAgentStatus = useCallback((event: AgentStatusEvent) => {
+    agentStatusListeners.current.forEach(cb => cb(event));
+  }, []);
+
+  const handleTodoProgress = useCallback((event: TodoProgressEvent) => {
+    todoProgressListeners.current.forEach(cb => cb(event));
+  }, []);
+
+  const handleExecution = useCallback((event: ExecutionStreamEvent) => {
+    executionListeners.current.forEach(cb => cb(event));
+  }, []);
+
+  const handleChatStreamStart = useCallback((event: ChatStreamStartEvent) => {
+    chatStreamStartListeners.current.forEach(cb => cb(event));
+  }, []);
+
+  const handleChatStreamChunk = useCallback((event: ChatStreamChunkEvent) => {
+    chatStreamChunkListeners.current.forEach(cb => cb(event));
+  }, []);
+
+  const handleChatStreamEnd = useCallback((event: ChatStreamEndEvent) => {
+    chatStreamEndListeners.current.forEach(cb => cb(event));
+  }, []);
+
   // Initialize socket connection when authenticated
   useEffect(() => {
     // Only connect when authenticated (cookies will be sent automatically)
@@ -83,50 +121,41 @@ export function WebSocketProvider({ children, isAuthenticated = false }: WebSock
 
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      setIsConnected(true);
-      // Re-subscribe to all previous subscriptions
-      subscriptions.current.forEach(sub => {
-        const [type, id] = sub.split(':');
-        socket.emit(`subscribe:${type}`, { id });
-      });
-    });
-
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-    });
-
-    // Handle events
-    socket.on('agent:status', (event: AgentStatusEvent) => {
-      agentStatusListeners.current.forEach(cb => cb(event));
-    });
-
-    socket.on('agent:todo', (event: TodoProgressEvent) => {
-      todoProgressListeners.current.forEach(cb => cb(event));
-    });
-
-    socket.on('agent:execution', (event: ExecutionStreamEvent) => {
-      executionListeners.current.forEach(cb => cb(event));
-    });
-
-    // Chat streaming events
-    socket.on('chat:stream:start', (event: ChatStreamStartEvent) => {
-      chatStreamStartListeners.current.forEach(cb => cb(event));
-    });
-
-    socket.on('chat:stream:chunk', (event: ChatStreamChunkEvent) => {
-      chatStreamChunkListeners.current.forEach(cb => cb(event));
-    });
-
-    socket.on('chat:stream:end', (event: ChatStreamEndEvent) => {
-      chatStreamEndListeners.current.forEach(cb => cb(event));
-    });
+    // Register memoized handlers
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('agent:status', handleAgentStatus);
+    socket.on('agent:todo', handleTodoProgress);
+    socket.on('agent:execution', handleExecution);
+    socket.on('chat:stream:start', handleChatStreamStart);
+    socket.on('chat:stream:chunk', handleChatStreamChunk);
+    socket.on('chat:stream:end', handleChatStreamEnd);
 
     return () => {
+      // Proper cleanup: remove all listeners before disconnect
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('agent:status', handleAgentStatus);
+      socket.off('agent:todo', handleTodoProgress);
+      socket.off('agent:execution', handleExecution);
+      socket.off('chat:stream:start', handleChatStreamStart);
+      socket.off('chat:stream:chunk', handleChatStreamChunk);
+      socket.off('chat:stream:end', handleChatStreamEnd);
+
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated]);
+  }, [
+    isAuthenticated,
+    handleConnect,
+    handleDisconnect,
+    handleAgentStatus,
+    handleTodoProgress,
+    handleExecution,
+    handleChatStreamStart,
+    handleChatStreamChunk,
+    handleChatStreamEnd,
+  ]);
 
   const subscribe = useCallback((type: 'agent' | 'server', id: string) => {
     const key = `${type}:${id}`;
@@ -262,7 +291,21 @@ export function useAgentsSubscription(agentIds: string[]) {
   }, [agentIds.join(','), subscribe, unsubscribe]); // Use join for stable dependency
 }
 
-// Hook to listen for agent status changes
+/**
+ * Hook to listen for agent status changes
+ *
+ * IMPORTANT: To prevent memory leaks and infinite re-subscriptions,
+ * the callback MUST be memoized with useCallback:
+ *
+ * @example
+ * ```tsx
+ * const handleStatus = useCallback((event) => {
+ *   // handle event
+ * }, [deps]);
+ *
+ * useAgentStatus(handleStatus);
+ * ```
+ */
 export function useAgentStatus(callback: EventCallback<AgentStatusEvent>) {
   const { onAgentStatus } = useWebSocket();
 
@@ -271,7 +314,11 @@ export function useAgentStatus(callback: EventCallback<AgentStatusEvent>) {
   }, [callback, onAgentStatus]);
 }
 
-// Hook to listen for todo progress
+/**
+ * Hook to listen for todo progress events
+ *
+ * IMPORTANT: To prevent memory leaks, wrap your callback with useCallback
+ */
 export function useTodoProgress(callback: EventCallback<TodoProgressEvent>) {
   const { onTodoProgress } = useWebSocket();
 
@@ -280,7 +327,11 @@ export function useTodoProgress(callback: EventCallback<TodoProgressEvent>) {
   }, [callback, onTodoProgress]);
 }
 
-// Hook to listen for execution events
+/**
+ * Hook to listen for execution events
+ *
+ * IMPORTANT: To prevent memory leaks, wrap your callback with useCallback
+ */
 export function useExecutionStream(callback: EventCallback<ExecutionStreamEvent>) {
   const { onExecution } = useWebSocket();
 
@@ -300,6 +351,11 @@ export function useChatSubscription(sessionId: string | undefined) {
   }, [sessionId, subscribeToChat, unsubscribeFromChat]);
 }
 
+/**
+ * Hook to listen for chat stream start events
+ *
+ * IMPORTANT: To prevent memory leaks, wrap your callback with useCallback
+ */
 export function useChatStreamStart(callback: EventCallback<ChatStreamStartEvent>) {
   const { onChatStreamStart } = useWebSocket();
 
@@ -308,6 +364,11 @@ export function useChatStreamStart(callback: EventCallback<ChatStreamStartEvent>
   }, [callback, onChatStreamStart]);
 }
 
+/**
+ * Hook to listen for chat stream chunk events
+ *
+ * IMPORTANT: To prevent memory leaks, wrap your callback with useCallback
+ */
 export function useChatStreamChunk(callback: EventCallback<ChatStreamChunkEvent>) {
   const { onChatStreamChunk } = useWebSocket();
 
@@ -316,6 +377,11 @@ export function useChatStreamChunk(callback: EventCallback<ChatStreamChunkEvent>
   }, [callback, onChatStreamChunk]);
 }
 
+/**
+ * Hook to listen for chat stream end events
+ *
+ * IMPORTANT: To prevent memory leaks, wrap your callback with useCallback
+ */
 export function useChatStreamEnd(callback: EventCallback<ChatStreamEndEvent>) {
   const { onChatStreamEnd } = useWebSocket();
 

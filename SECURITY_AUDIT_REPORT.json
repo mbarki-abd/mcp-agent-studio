@@ -1,0 +1,660 @@
+{
+  "audit": {
+    "project": "MCP Agent Studio",
+    "date": "2025-12-13",
+    "auditor": "AGT-SECURITY",
+    "framework": "OWASP Top 10 2021"
+  },
+  "vulnerabilities": [
+    {
+      "id": "VULN-001",
+      "owasp": "A02:2021 - Cryptographic Failures",
+      "severity": "CRITICAL",
+      "category": "Weak Cryptography",
+      "file": "server/src/utils/crypto.ts",
+      "line": 13,
+      "description": "Utilisation d'un salt statique 'salt' avec scrypt pour dériver la clé de chiffrement",
+      "exploit": "Un attaquant avec accès au code source peut pré-calculer des rainbow tables avec le salt statique, rendant le chiffrement vulnérable aux attaques par force brute",
+      "remediation": "Utiliser un salt aléatoire unique par clé dérivée, ou mieux, utiliser directement une clé de 32 bytes depuis process.env.ENCRYPTION_KEY (en base64 ou hex) sans dérivation avec salt statique",
+      "cwe": "CWE-327",
+      "cvss": "9.1"
+    },
+    {
+      "id": "VULN-002",
+      "owasp": "A07:2021 - Identification and Authentication Failures",
+      "severity": "HIGH",
+      "category": "Weak Password Hashing",
+      "file": "server/src/utils/password.ts",
+      "line": 3,
+      "description": "Bcrypt configuré avec 12 rounds - acceptable mais en dessous des recommandations actuelles (14+)",
+      "exploit": "Avec l'augmentation de la puissance de calcul (GPU, ASIC), 12 rounds devient insuffisant contre les attaques par force brute sur des mots de passe faibles",
+      "remediation": "Augmenter SALT_ROUNDS à 14 minimum (recommandation OWASP 2025). Considérer argon2id comme alternative plus résistante",
+      "cwe": "CWE-916",
+      "cvss": "7.5"
+    },
+    {
+      "id": "VULN-003",
+      "owasp": "A05:2021 - Security Misconfiguration",
+      "severity": "HIGH",
+      "category": "Cookie Security",
+      "file": "server/src/utils/cookies.ts",
+      "line": 19,
+      "description": "Cookie sameSite='lax' au lieu de 'strict' - protection CSRF affaiblie",
+      "exploit": "En mode 'lax', les cookies sont envoyés lors de navigations top-level GET (ex: clic sur lien externe), permettant des attaques CSRF GET-based si l'application a des actions sensibles en GET",
+      "remediation": "Passer sameSite à 'strict' pour une protection CSRF maximale, ou implémenter des CSRF tokens supplémentaires pour les opérations sensibles",
+      "cwe": "CWE-352",
+      "cvss": "7.3"
+    },
+    {
+      "id": "VULN-004",
+      "owasp": "A05:2021 - Security Misconfiguration",
+      "severity": "HIGH",
+      "category": "CSP Disabled",
+      "file": "server/src/index.ts",
+      "line": 119,
+      "description": "Content Security Policy complètement désactivée (contentSecurityPolicy: false)",
+      "exploit": "Sans CSP, l'application est vulnérable aux attaques XSS persistantes et aux injections de scripts malveillants",
+      "remediation": "Activer CSP avec une politique restrictive : default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
+      "cwe": "CWE-693",
+      "cvss": "7.5"
+    },
+    {
+      "id": "VULN-005",
+      "owasp": "A02:2021 - Cryptographic Failures",
+      "severity": "HIGH",
+      "category": "Hardcoded Secrets",
+      "file": "server/src/services/audit.service.ts",
+      "line": 14,
+      "description": "Secret d'intégrité d'audit avec fallback hardcodé 'audit-integrity-secret-change-in-production'",
+      "exploit": "Si AUDIT_INTEGRITY_SECRET n'est pas défini, le secret par défaut est utilisé, permettant à un attaquant de forger des signatures HMAC pour falsifier les logs d'audit",
+      "remediation": "Lever une exception si AUDIT_INTEGRITY_SECRET n'est pas défini en production, ne jamais utiliser de fallback pour les secrets critiques",
+      "cwe": "CWE-798",
+      "cvss": "7.2"
+    },
+    {
+      "id": "VULN-006",
+      "owasp": "A07:2021 - Identification and Authentication Failures",
+      "severity": "MEDIUM",
+      "category": "JWT Expiration",
+      "file": "server/src/services/auth.service.ts",
+      "line": 201,
+      "description": "JWT access token avec expiration de 7 jours - trop longue pour un access token",
+      "exploit": "Un token volé reste valide 7 jours, augmentant la fenêtre d'exploitation en cas de vol (XSS, MITM, logs exposés)",
+      "remediation": "Réduire l'expiration des access tokens à 15-30 minutes max, utiliser le refresh token (30j) pour renouveler",
+      "cwe": "CWE-613",
+      "cvss": "6.5"
+    },
+    {
+      "id": "VULN-007",
+      "owasp": "A05:2021 - Security Misconfiguration",
+      "severity": "MEDIUM",
+      "category": "Insecure Development Settings",
+      "file": "server/src/middleware/ratelimit.middleware.ts",
+      "line": 26,
+      "description": "Rate limiting extrêmement relâché en développement (100 requêtes/min vs 5/15min en prod pour auth)",
+      "exploit": "Si NODE_ENV n'est pas correctement défini en production, les limites de dev s'appliquent, permettant des attaques par force brute sur /auth/login",
+      "remediation": "Appliquer des limites strictes par défaut et les relâcher explicitement en dev, ou bloquer complètement si NODE_ENV=production mais limites de dev détectées",
+      "cwe": "CWE-770",
+      "cvss": "6.3"
+    },
+    {
+      "id": "VULN-008",
+      "owasp": "A03:2021 - Injection",
+      "severity": "MEDIUM",
+      "category": "Input Sanitization Bypass",
+      "file": "server/src/middleware/sanitization.middleware.ts",
+      "line": 84,
+      "description": "blockThreats=false par défaut - les menaces détectées ne sont que loggées, pas bloquées",
+      "exploit": "Les patterns d'injection SQL/NoSQL/XSS sont détectés mais les requêtes passent quand même, laissant la porte ouverte aux attaques",
+      "remediation": "Passer blockThreats à true en production pour les menaces critiques (sqlInjection, noSqlInjection, commandInjection)",
+      "cwe": "CWE-20",
+      "cvss": "6.1"
+    },
+    {
+      "id": "VULN-009",
+      "owasp": "A09:2021 - Security Logging and Monitoring Failures",
+      "severity": "MEDIUM",
+      "category": "Sensitive Data in Logs",
+      "file": "server/src/routes/auth.routes.ts",
+      "line": 397,
+      "description": "Token de reset password loggé partiellement dans les logs (8 premiers caractères)",
+      "exploit": "Même partiel, cela facilite les attaques par force brute si les logs sont compromis. De plus, le token complet transite en clair dans l'email",
+      "remediation": "Ne jamais logger de tokens, même partiellement. Utiliser un ID de référence sans valeur cryptographique",
+      "cwe": "CWE-532",
+      "cvss": "5.9"
+    },
+    {
+      "id": "VULN-010",
+      "owasp": "A01:2021 - Broken Access Control",
+      "severity": "MEDIUM",
+      "category": "Role Escalation Risk",
+      "file": "server/src/routes/auth.routes.ts",
+      "line": 80,
+      "description": "Premier utilisateur créé automatiquement en tant qu'ADMIN lors de l'inscription",
+      "exploit": "Si la base est réinitialisée ou compromise, un attaquant peut créer le premier compte et obtenir des privilèges ADMIN",
+      "remediation": "Implémenter un processus de bootstrap sécurisé (seed admin via CLI avec mot de passe fort), ou confirmation par email pour le premier admin",
+      "cwe": "CWE-269",
+      "cvss": "5.7"
+    },
+    {
+      "id": "VULN-011",
+      "owasp": "A05:2021 - Security Misconfiguration",
+      "severity": "MEDIUM",
+      "category": "Database Exposure",
+      "file": "docker-compose.yml",
+      "line": 34,
+      "description": "PostgreSQL exposé sur 0.0.0.0:5432 en production",
+      "exploit": "La base de données est accessible depuis l'extérieur du réseau Docker si le port 5432 est ouvert sur l'hôte",
+      "remediation": "Supprimer 'ports: 5432:5432' en production et utiliser uniquement le réseau Docker interne pour la communication inter-services",
+      "cwe": "CWE-668",
+      "cvss": "5.5"
+    },
+    {
+      "id": "VULN-012",
+      "owasp": "A05:2021 - Security Misconfiguration",
+      "severity": "LOW",
+      "category": "Default Credentials",
+      "file": "server/.env.example",
+      "line": 14,
+      "description": "Exemples de secrets avec des valeurs par défaut faibles et explicites",
+      "exploit": "Si .env.example est copié tel quel en production, l'application utilise des secrets prévisibles",
+      "remediation": "Utiliser des placeholders 'CHANGE_ME_IN_PRODUCTION' et valider au démarrage que les secrets ne correspondent pas aux valeurs d'exemple",
+      "cwe": "CWE-798",
+      "cvss": "4.3"
+    },
+    {
+      "id": "VULN-013",
+      "owasp": "A06:2021 - Vulnerable and Outdated Components",
+      "severity": "LOW",
+      "category": "Missing Dependency Audit",
+      "file": "server/package.json",
+      "line": 1,
+      "description": "Absence de script npm audit dans package.json et pas de scan automatisé des dépendances",
+      "exploit": "Vulnérabilités connues dans les dépendances npm peuvent être exploitées (ex: prototype pollution, RCE)",
+      "remediation": "Ajouter 'npm audit' dans CI/CD, configurer Dependabot/Renovate pour les mises à jour automatiques, utiliser Snyk ou npm audit fix",
+      "cwe": "CWE-1035",
+      "cvss": "4.0"
+    }
+  ],
+  "misconfigurations": [
+    {
+      "id": "MISC-001",
+      "file": "server/src/utils/cookies.ts",
+      "issue": "Refresh token accessible depuis tous les chemins via path='/'",
+      "severity": "MEDIUM",
+      "fix": "Le refresh token est déjà limité à path='/api/auth/refresh' (ligne 28), mais vérifier que clearAuthCookies utilise le même path",
+      "current": "REFRESH_TOKEN_COOKIE_OPTIONS.path = '/api/auth/refresh'",
+      "recommended": "OK - Déjà correctement configuré"
+    },
+    {
+      "id": "MISC-002",
+      "file": "server/src/index.ts",
+      "issue": "Pas de validation stricte de CORS_ORIGIN en production",
+      "severity": "MEDIUM",
+      "fix": "Rejeter les wildcards (*) en production et valider le format des origines (https uniquement)",
+      "current": "Accepte n'importe quelle valeur de CORS_ORIGIN",
+      "recommended": "Valider que toutes les origines commencent par https:// en production"
+    },
+    {
+      "id": "MISC-003",
+      "file": "docker-compose.yml",
+      "issue": "Variables d'environnement sensibles sans chiffrement",
+      "severity": "MEDIUM",
+      "fix": "Utiliser Docker secrets ou un gestionnaire de secrets (HashiCorp Vault, AWS Secrets Manager)",
+      "current": "JWT_SECRET et POSTGRES_PASSWORD en clair dans .env",
+      "recommended": "Docker secrets + rotation automatique des secrets"
+    },
+    {
+      "id": "MISC-004",
+      "file": "server/src/index.ts",
+      "issue": "Rate limiting global trop généreux (100 req/min)",
+      "severity": "LOW",
+      "fix": "Différencier par route : 30/min pour writes, 10/min pour expensive ops",
+      "current": "max: 100, timeWindow: '1 minute'",
+      "recommended": "max: 60 pour lecture, 20 pour écriture, 5 pour opérations coûteuses"
+    },
+    {
+      "id": "MISC-005",
+      "file": "server/src/middleware/sanitization.middleware.ts",
+      "issue": "HTML escaping désactivé pour éviter de casser la fonctionnalité (ligne 157)",
+      "severity": "MEDIUM",
+      "fix": "Activer escapeHtml et gérer les cas légitimes avec un whitelist de fields",
+      "current": "HTML non échappé dans la plupart des champs",
+      "recommended": "Échapper par défaut, whitelister explicitement les champs markdown/rich text"
+    },
+    {
+      "id": "MISC-006",
+      "file": "server/src/middleware/sanitization.middleware.ts",
+      "issue": "Limite de profondeur d'objet à 10 niveaux - potentiel DoS",
+      "severity": "LOW",
+      "fix": "Réduire à 5 niveaux max et limiter la taille totale du JSON",
+      "current": "maxDepth: 10",
+      "recommended": "maxDepth: 5, maxBodySize: 1MB"
+    },
+    {
+      "id": "MISC-007",
+      "file": "server/src/index.ts",
+      "issue": "Socket.IO sans timeout de connexion configuré",
+      "severity": "LOW",
+      "fix": "Ajouter pingTimeout et pingInterval pour détecter les connexions mortes",
+      "current": "Configuration par défaut",
+      "recommended": "pingTimeout: 5000, pingInterval: 10000"
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "category": "Authentication",
+      "priority": "P0",
+      "title": "Implémenter une rotation des JWT (JTI)",
+      "current": "JTI généré mais non stocké ni vérifié en base",
+      "recommended": "Stocker les JTI actifs en Redis avec TTL, invalider lors du logout/changement de mot de passe",
+      "rationale": "Permet de révoquer les tokens avant expiration (logout, compromission détectée)"
+    },
+    {
+      "id": "REC-002",
+      "category": "Authentication",
+      "priority": "P0",
+      "title": "Implémenter MFA (Multi-Factor Authentication)",
+      "current": "Authentification uniquement par email/password",
+      "recommended": "TOTP (Time-based OTP) avec QR code, backup codes, SMS optionnel",
+      "rationale": "Protection contre le vol de credentials, recommandation OWASP pour comptes admin"
+    },
+    {
+      "id": "REC-003",
+      "category": "Cryptography",
+      "priority": "P0",
+      "title": "Migrer de bcrypt vers Argon2id",
+      "current": "bcrypt avec 12 rounds",
+      "recommended": "argon2id (gagnant du Password Hashing Competition, résistant GPU/ASIC)",
+      "rationale": "Argon2id offre une meilleure résistance aux attaques matérielles modernes"
+    },
+    {
+      "id": "REC-004",
+      "category": "Access Control",
+      "priority": "P0",
+      "title": "Implémenter l'isolation multi-tenant stricte",
+      "current": "organizationId vérifié dans le middleware RBAC",
+      "recommended": "Row-Level Security (RLS) dans PostgreSQL + validation systématique du tenant dans chaque requête Prisma",
+      "rationale": "Defense in depth - empêche les fuites de données inter-organisations même en cas de bug applicatif"
+    },
+    {
+      "id": "REC-005",
+      "category": "Security Headers",
+      "priority": "P1",
+      "title": "Activer tous les headers de sécurité Helmet",
+      "current": "CSP désactivée, autres headers par défaut",
+      "recommended": "CSP strict + HSTS + X-Frame-Options: DENY + X-Content-Type-Options: nosniff + Referrer-Policy: strict-origin-when-cross-origin",
+      "rationale": "Protection en profondeur contre XSS, clickjacking, MIME sniffing"
+    },
+    {
+      "id": "REC-006",
+      "category": "Input Validation",
+      "priority": "P1",
+      "title": "Centraliser la validation avec Zod pour tous les endpoints",
+      "current": "Validation partielle via validation.middleware.ts",
+      "recommended": "Schémas Zod exhaustifs pour body/query/params sur TOUS les endpoints",
+      "rationale": "Prévention injection + documentation auto-générée + typage TypeScript"
+    },
+    {
+      "id": "REC-007",
+      "category": "Rate Limiting",
+      "priority": "P1",
+      "title": "Migrer le rate limiting vers Redis (distributed)",
+      "current": "In-memory Map (non distribué, perdu au redémarrage)",
+      "recommended": "redis-rate-limiter avec clés par user+route, persistent entre redémarrages",
+      "rationale": "Permet le scaling horizontal + limites persistantes + detection d'attaques distribuées"
+    },
+    {
+      "id": "REC-008",
+      "category": "Logging",
+      "priority": "P1",
+      "title": "Implémenter un SIEM ou log aggregation centralisé",
+      "current": "Logs dans stdout, audit en base PostgreSQL",
+      "recommended": "ELK Stack (Elasticsearch + Logstash + Kibana) ou Datadog avec alerting sur patterns suspects",
+      "rationale": "Détection temps réel des attaques (brute force, injection, escalation privilèges)"
+    },
+    {
+      "id": "REC-009",
+      "category": "Secrets Management",
+      "priority": "P1",
+      "title": "Utiliser un gestionnaire de secrets professionnel",
+      "current": "Secrets en variables d'environnement",
+      "recommended": "HashiCorp Vault, AWS Secrets Manager, ou Azure Key Vault avec rotation automatique",
+      "rationale": "Rotation automatique des secrets, audit d'accès, chiffrement au repos"
+    },
+    {
+      "id": "REC-010",
+      "category": "Network Security",
+      "priority": "P1",
+      "title": "Isoler les services dans des réseaux Docker séparés",
+      "current": "Un seul réseau mcp-network",
+      "recommended": "Réseau backend (DB+Redis), réseau application (server), réseau frontend (dashboard)",
+      "ratitude": "Principe du moindre privilège - le frontend ne doit jamais accéder directement à la DB"
+    },
+    {
+      "id": "REC-011",
+      "category": "Data Protection",
+      "priority": "P2",
+      "title": "Chiffrer les données sensibles en base (encryption at rest)",
+      "current": "Données en clair dans PostgreSQL",
+      "recommended": "Chiffrer les champs sensibles (masterToken, apiKeys) avec crypto.ts avant stockage",
+      "rationale": "Protection en cas de dump de base ou backup compromis"
+    },
+    {
+      "id": "REC-012",
+      "category": "Session Management",
+      "priority": "P2",
+      "title": "Implémenter la détection de sessions concurrentes",
+      "current": "Plusieurs sessions simultanées autorisées",
+      "recommended": "Alerter/bloquer lors de connexions depuis IPs/pays différents, option de déconnexion à distance",
+      "rationale": "Détection de vol de credentials, contrôle utilisateur sur ses sessions"
+    },
+    {
+      "id": "REC-013",
+      "category": "API Security",
+      "priority": "P2",
+      "title": "Implémenter GraphQL avec query complexity limits",
+      "current": "REST API uniquement",
+      "recommended": "Alternative GraphQL avec depth limiting, query cost analysis, rate limiting par complexité",
+      "rationale": "Flexibilité pour le frontend + protection contre les DoS via requêtes complexes"
+    },
+    {
+      "id": "REC-014",
+      "category": "Compliance",
+      "priority": "P2",
+      "title": "Conformité RGPD : droit à l'oubli + export données",
+      "current": "Pas de fonctionnalité RGPD explicite",
+      "recommended": "Endpoints /api/user/export-data et /api/user/delete-account avec cascade deletion",
+      "rationale": "Obligation légale RGPD pour services EU, évite amendes"
+    },
+    {
+      "id": "REC-015",
+      "category": "Testing",
+      "priority": "P2",
+      "title": "Tests de sécurité automatisés (SAST/DAST)",
+      "current": "Tests unitaires uniquement",
+      "recommended": "SonarQube (SAST) + OWASP ZAP (DAST) dans CI/CD, pen-testing annuel",
+      "rationale": "Détection précoce des vulnérabilités avant production"
+    }
+  ],
+  "score": {
+    "overall": "C+",
+    "breakdown": {
+      "authentication": {
+        "score": 65,
+        "grade": "C",
+        "issues": [
+          "JWT expiration trop longue (7j)",
+          "Pas de MFA",
+          "Bcrypt rounds insuffisants (12 vs 14+)",
+          "Pas de révocation de tokens"
+        ],
+        "strengths": [
+          "httpOnly cookies",
+          "Session tracking en DB",
+          "Audit des tentatives de connexion"
+        ]
+      },
+      "authorization": {
+        "score": 75,
+        "grade": "B-",
+        "issues": [
+          "Isolation multi-tenant non garantie au niveau DB (pas de RLS)",
+          "Premier user = admin automatique"
+        ],
+        "strengths": [
+          "RBAC avec CASL implémenté",
+          "Hiérarchie de rôles claire",
+          "Middleware RBAC sur toutes les routes sensibles"
+        ]
+      },
+      "dataProtection": {
+        "score": 55,
+        "grade": "D+",
+        "issues": [
+          "CRITICAL: Salt statique pour dérivation de clé",
+          "Pas de chiffrement at-rest des données sensibles",
+          "Secrets avec fallback hardcodés",
+          "Tokens loggés partiellement"
+        ],
+        "strengths": [
+          "AES-256-GCM pour chiffrement",
+          "httpOnly cookies (protection XSS)",
+          "Sanitization des logs"
+        ]
+      },
+      "inputValidation": {
+        "score": 70,
+        "grade": "B-",
+        "issues": [
+          "Sanitization en mode log-only (pas de blocage)",
+          "HTML escaping désactivé",
+          "Validation Zod non exhaustive"
+        ],
+        "strengths": [
+          "Middleware de sanitization robuste",
+          "Détection de patterns d'injection",
+          "Prisma (parameterized queries)",
+          "Normalisation whitespace"
+        ]
+      },
+      "networkSecurity": {
+        "score": 60,
+        "grade": "D+",
+        "issues": [
+          "CRITICAL: CSP complètement désactivée",
+          "sameSite=lax (vulnérabilité CSRF partielle)",
+          "PostgreSQL exposé en production",
+          "CORS sans validation HTTPS"
+        ],
+        "strengths": [
+          "Helmet activé (sauf CSP)",
+          "HTTPS enforced en prod (Traefik)",
+          "Rate limiting implémenté"
+        ]
+      },
+      "logging": {
+        "score": 80,
+        "grade": "B+",
+        "issues": [
+          "Tokens loggés partiellement",
+          "Pas de SIEM/alerting centralisé"
+        ],
+        "strengths": [
+          "Audit trail complet",
+          "Correlation IDs",
+          "Sanitization des données sensibles",
+          "Logs structurés (Pino)"
+        ]
+      },
+      "dependencies": {
+        "score": 70,
+        "grade": "B-",
+        "issues": [
+          "Pas de scan npm audit automatisé",
+          "Pas de Dependabot configuré"
+        ],
+        "strengths": [
+          "Dépendances récentes (2024-2025)",
+          "Pas de dépendances obsolètes critiques détectées",
+          "Fastify v4 (moderne et sécurisé)"
+        ]
+      },
+      "configuration": {
+        "score": 65,
+        "grade": "C",
+        "issues": [
+          "Rate limiting trop relâché en dev (risque prod)",
+          "Secrets avec fallbacks faibles",
+          "DB ports exposés"
+        ],
+        "strengths": [
+          "Variables d'environnement centralisées",
+          "Validation des secrets en prod",
+          "Health checks implémentés"
+        ]
+      }
+    },
+    "totalScore": 67.5,
+    "letterGrade": "C+",
+    "interpretation": "Sécurité MOYENNE - Des bases solides mais des vulnérabilités CRITIQUES à corriger avant production"
+  },
+  "compliance": {
+    "owasp": {
+      "A01_BrokenAccessControl": {
+        "status": "PARTIAL",
+        "issues": ["Isolation multi-tenant non garantie", "Premier user admin automatique"],
+        "coverage": "70%"
+      },
+      "A02_CryptographicFailures": {
+        "status": "FAIL",
+        "issues": ["Salt statique crypto", "Bcrypt rounds insuffisants", "Secrets hardcodés"],
+        "coverage": "40%"
+      },
+      "A03_Injection": {
+        "status": "PASS",
+        "issues": ["Sanitization non-bloquante"],
+        "coverage": "85%"
+      },
+      "A04_InsecureDesign": {
+        "status": "PARTIAL",
+        "issues": ["Pas de MFA", "Pas de détection de sessions concurrentes"],
+        "coverage": "60%"
+      },
+      "A05_SecurityMisconfiguration": {
+        "status": "FAIL",
+        "issues": ["CSP désactivée", "DB exposée", "Rate limiting dev en prod"],
+        "coverage": "50%"
+      },
+      "A06_VulnerableComponents": {
+        "status": "PARTIAL",
+        "issues": ["Pas de scan automatisé"],
+        "coverage": "70%"
+      },
+      "A07_IdentificationAuthenticationFailures": {
+        "status": "PARTIAL",
+        "issues": ["JWT 7j trop long", "Pas de MFA", "Bcrypt 12 rounds"],
+        "coverage": "65%"
+      },
+      "A08_SoftwareDataIntegrityFailures": {
+        "status": "PASS",
+        "issues": [],
+        "coverage": "90%"
+      },
+      "A09_SecurityLoggingMonitoringFailures": {
+        "status": "PASS",
+        "issues": ["Tokens loggés partiellement"],
+        "coverage": "80%"
+      },
+      "A10_ServerSideRequestForgery": {
+        "status": "PASS",
+        "issues": [],
+        "coverage": "N/A"
+      }
+    },
+    "overallCompliance": "58%",
+    "rating": "MEDIUM_RISK"
+  },
+  "prioritizedActions": [
+    {
+      "priority": 1,
+      "action": "CRITICAL: Corriger le salt statique dans crypto.ts (VULN-001)",
+      "effort": "2h",
+      "impact": "Très élevé"
+    },
+    {
+      "priority": 2,
+      "action": "CRITICAL: Activer CSP stricte (VULN-004)",
+      "effort": "4h",
+      "impact": "Élevé"
+    },
+    {
+      "priority": 3,
+      "action": "HIGH: Augmenter bcrypt à 14 rounds (VULN-002)",
+      "effort": "30min",
+      "impact": "Élevé"
+    },
+    {
+      "priority": 4,
+      "action": "HIGH: Passer cookies à sameSite=strict (VULN-003)",
+      "effort": "1h",
+      "impact": "Élevé"
+    },
+    {
+      "priority": 5,
+      "action": "HIGH: Valider AUDIT_INTEGRITY_SECRET en prod (VULN-005)",
+      "effort": "30min",
+      "impact": "Élevé"
+    },
+    {
+      "priority": 6,
+      "action": "MEDIUM: Réduire JWT expiration à 30min (VULN-006)",
+      "effort": "2h",
+      "impact": "Moyen"
+    },
+    {
+      "priority": 7,
+      "action": "MEDIUM: Activer blockThreats=true en prod (VULN-008)",
+      "effort": "1h",
+      "impact": "Moyen"
+    },
+    {
+      "priority": 8,
+      "action": "P0: Implémenter MFA TOTP (REC-002)",
+      "effort": "3j",
+      "impact": "Très élevé"
+    },
+    {
+      "priority": 9,
+      "action": "P0: Row-Level Security PostgreSQL (REC-004)",
+      "effort": "2j",
+      "impact": "Très élevé"
+    },
+    {
+      "priority": 10,
+      "action": "P1: Migrer rate limiting vers Redis (REC-007)",
+      "effort": "1j",
+      "impact": "Élevé"
+    }
+  ],
+  "executiveSummary": {
+    "fr": "L'application MCP Agent Studio présente une architecture de sécurité MOYENNE (C+, 67.5/100) avec des fondations solides mais des vulnérabilités CRITIQUES nécessitant une correction immédiate avant mise en production. Les points forts incluent un système d'authentification par cookies httpOnly, un RBAC robuste avec CASL, une sanitization des inputs, et un audit logging complet. Cependant, 2 vulnérabilités CRITIQUES (salt statique crypto, CSP désactivée), 6 vulnérabilités HIGH (bcrypt faible, sameSite lax, secrets hardcodés, JWT 7j, rate limiting relâché, sanitization non-bloquante), et 5 vulnérabilités MEDIUM mettent l'application à risque. Les priorités absolues : corriger le salt statique (2h), activer CSP (4h), augmenter bcrypt à 14 rounds (30min), et passer sameSite à strict (1h). À moyen terme : implémenter MFA, Row-Level Security PostgreSQL, et migrer le rate limiting vers Redis. Budget estimé pour sécurisation complète : 10 jours-homme.",
+    "en": "MCP Agent Studio exhibits MEDIUM security posture (C+, 67.5/100) with solid foundations but CRITICAL vulnerabilities requiring immediate remediation before production. Strengths include httpOnly cookie authentication, robust RBAC with CASL, input sanitization, and comprehensive audit logging. However, 2 CRITICAL (static crypto salt, disabled CSP), 6 HIGH (weak bcrypt, lax sameSite, hardcoded secrets, 7d JWT, relaxed rate limiting, non-blocking sanitization), and 5 MEDIUM vulnerabilities expose the application to risk. Top priorities: fix static salt (2h), enable strict CSP (4h), increase bcrypt to 14 rounds (30min), and set sameSite=strict (1h). Medium-term: implement MFA, PostgreSQL Row-Level Security, and migrate rate limiting to Redis. Estimated full hardening effort: 10 person-days."
+  },
+  "nextSteps": {
+    "immediate": [
+      "Créer un plan de remédiation avec assignation des VULN-001 à VULN-005 (CRITICAL/HIGH)",
+      "Configurer npm audit dans CI/CD",
+      "Activer blockThreats=true en production",
+      "Documenter les secrets requis et valider qu'ils ne matchent pas les exemples"
+    ],
+    "shortTerm": [
+      "Implémenter MFA (TOTP)",
+      "Migrer rate limiting vers Redis",
+      "Activer Row-Level Security PostgreSQL",
+      "Mettre en place un SIEM ou log aggregation"
+    ],
+    "longTerm": [
+      "Pen-testing professionnel annuel",
+      "Conformité RGPD complète (export/delete)",
+      "Migrer vers Argon2id",
+      "Implémenter GraphQL avec query complexity"
+    ]
+  },
+  "tools": {
+    "recommended": [
+      "SonarQube (SAST)",
+      "OWASP ZAP (DAST)",
+      "Snyk (dependency scanning)",
+      "HashiCorp Vault (secrets management)",
+      "ELK Stack ou Datadog (SIEM)",
+      "Dependabot (automated updates)"
+    ]
+  },
+  "contacts": {
+    "securityChampion": "À définir",
+    "incidentResponse": "À définir",
+    "reportedBy": "AGT-SECURITY (Claude Opus 4.5)"
+  }
+}

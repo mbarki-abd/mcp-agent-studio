@@ -16,17 +16,17 @@ export const COOKIE_REFRESH_TOKEN = 'refresh_token';
 export const ACCESS_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: isProduction, // HTTPS only in production
-  sameSite: 'lax' as const, // CSRF protection
+  sameSite: 'strict' as const, // CSRF protection
   path: '/',
-  maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+  maxAge: 30 * 60, // 30 minutes in seconds
 };
 
 export const REFRESH_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: 'lax' as const,
+  sameSite: 'strict' as const,
   path: '/api/auth/refresh', // Only sent to refresh endpoint
-  maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
+  maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
 };
 
 /**

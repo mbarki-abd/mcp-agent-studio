@@ -3,18 +3,20 @@ import crypto from 'crypto';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
+const SALT_LENGTH = 32;
 
-function getEncryptionKey(): Buffer {
+function getEncryptionKey(salt: Buffer): Buffer {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
     throw new Error('ENCRYPTION_KEY environment variable is required');
   }
-  // Ensure key is 32 bytes for AES-256
-  return crypto.scryptSync(key, 'salt', 32);
+  // Ensure key is 32 bytes for AES-256 using random salt
+  return crypto.scryptSync(key, salt, 32);
 }
 
 export function encrypt(text: string): string {
-  const key = getEncryptionKey();
+  const salt = crypto.randomBytes(SALT_LENGTH);
+  const key = getEncryptionKey(salt);
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
@@ -23,22 +25,23 @@ export function encrypt(text: string): string {
 
   const authTag = cipher.getAuthTag();
 
-  // Return iv:authTag:encrypted
-  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  // Return salt:iv:authTag:encrypted
+  return `${salt.toString('hex')}:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
 export function decrypt(encryptedData: string): string {
-  const key = getEncryptionKey();
   const parts = encryptedData.split(':');
 
-  if (parts.length !== 3) {
+  if (parts.length !== 4) {
     throw new Error('Invalid encrypted data format');
   }
 
-  const [ivHex, authTagHex, encrypted] = parts;
+  const [saltHex, ivHex, authTagHex, encrypted] = parts;
+  const salt = Buffer.from(saltHex, 'hex');
   const iv = Buffer.from(ivHex, 'hex');
   const authTag = Buffer.from(authTagHex, 'hex');
 
+  const key = getEncryptionKey(salt);
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 

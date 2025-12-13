@@ -114,9 +114,21 @@ async function registerPlugins() {
     parseOptions: {},
   });
 
-  // Security headers
+  // Security headers with CSP enabled
   await fastify.register(helmet, {
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"], // SPA requires inline scripts
+        styleSrc: ["'self'", "'unsafe-inline'"], // SPA requires inline styles
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'", 'ws:', 'wss:'], // WebSocket support
+        fontSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
   });
 
   // JWT

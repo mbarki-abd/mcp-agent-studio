@@ -73,31 +73,34 @@ describe('Crypto Utilities', () => {
     it('should throw error for invalid encrypted data format', () => {
       expect(() => decrypt('invalid')).toThrow('Invalid encrypted data format');
       expect(() => decrypt('only:two')).toThrow('Invalid encrypted data format');
-      expect(() => decrypt('too:many:parts:here')).toThrow();
+      expect(() => decrypt('only:three:parts')).toThrow('Invalid encrypted data format');
+      expect(() => decrypt('too:many:parts:here:five')).toThrow();
     });
 
     it('should throw error for tampered ciphertext', () => {
       const original = 'Test data';
       const encrypted = encrypt(original);
       const parts = encrypted.split(':');
-      // Tamper with encrypted data
-      parts[2] = 'ff'.repeat(parts[2].length / 2);
+      // Tamper with encrypted data (index 3 is the encrypted data in new format)
+      parts[3] = 'ff'.repeat(parts[3].length / 2);
       const tampered = parts.join(':');
 
       expect(() => decrypt(tampered)).toThrow();
     });
 
-    it('encrypted format should have three colon-separated parts', () => {
+    it('encrypted format should have four colon-separated parts (salt:iv:authTag:encrypted)', () => {
       const encrypted = encrypt('test');
       const parts = encrypted.split(':');
 
-      expect(parts.length).toBe(3);
+      expect(parts.length).toBe(4);
+      // Salt should be 64 hex characters (32 bytes)
+      expect(parts[0].length).toBe(64);
       // IV should be 32 hex characters (16 bytes)
-      expect(parts[0].length).toBe(32);
-      // Auth tag should be 32 hex characters (16 bytes)
       expect(parts[1].length).toBe(32);
+      // Auth tag should be 32 hex characters (16 bytes)
+      expect(parts[2].length).toBe(32);
       // Encrypted data should be hex
-      expect(/^[0-9a-f]+$/i.test(parts[2])).toBe(true);
+      expect(/^[0-9a-f]+$/i.test(parts[3])).toBe(true);
     });
   });
 

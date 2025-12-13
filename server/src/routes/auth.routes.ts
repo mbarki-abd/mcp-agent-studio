@@ -57,7 +57,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(body.password, 10);
+    const passwordHash = await bcrypt.hash(body.password, 14);
 
     // Create organization
     const orgName = body.organizationName || `${body.name}'s Organization`;
@@ -88,12 +88,12 @@ export async function authRoutes(fastify: FastifyInstance) {
     // Generate tokens
     const token = fastify.jwt.sign(
       { userId: user.id, email: user.email, role: user.role, jti },
-      { expiresIn: '7d' }
+      { expiresIn: '30m' }
     );
 
     const refreshToken = fastify.jwt.sign(
       { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     );
 
     // Create session
@@ -102,7 +102,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         userId: user.id,
         token,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
       },
     });
 
@@ -147,7 +147,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     if (!user) {
       // Log failed login attempt (user not found)
       await auditLogin(request, false, undefined, body.email, 'User not found');
-      return reply.status(401).send({ error: 'Invalid credentials' });
+      return reply.status(401).send({ error: 'Invalid email or password' });
     }
 
     // Verify password
@@ -156,7 +156,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     if (!validPassword) {
       // Log failed login attempt (wrong password)
       await auditLogin(request, false, user.id, user.email, 'Invalid password');
-      return reply.status(401).send({ error: 'Invalid credentials' });
+      return reply.status(401).send({ error: 'Invalid email or password' });
     }
 
     // Generate unique JWT ID to prevent token collisions
@@ -165,12 +165,12 @@ export async function authRoutes(fastify: FastifyInstance) {
     // Generate tokens
     const token = fastify.jwt.sign(
       { userId: user.id, email: user.email, role: user.role, jti },
-      { expiresIn: '7d' }
+      { expiresIn: '30m' }
     );
 
     const refreshToken = fastify.jwt.sign(
       { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     );
 
     // Delete existing sessions for this user
@@ -184,7 +184,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         userId: user.id,
         token,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
       },
     });
 
@@ -317,12 +317,12 @@ export async function authRoutes(fastify: FastifyInstance) {
       // Generate new tokens
       const newToken = fastify.jwt.sign(
         { userId: user.id, email: user.email, role: user.role, jti: crypto.randomUUID() },
-        { expiresIn: '7d' }
+        { expiresIn: '30m' }
       );
 
       const newRefreshToken = fastify.jwt.sign(
         { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
-        { expiresIn: '30d' }
+        { expiresIn: '7d' }
       );
 
       // Update session
@@ -331,7 +331,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         data: {
           token: newToken,
           refreshToken: newRefreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         },
       });
 
@@ -443,7 +443,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, 14);
 
     // Update password and mark token as used
     await prisma.$transaction([
@@ -731,7 +731,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, 14);
 
     // Update password
     await prisma.user.update({
@@ -820,7 +820,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
 
     // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 14);
 
     // Create user and mark invitation as accepted in a transaction
     const [user] = await prisma.$transaction([
@@ -847,12 +847,12 @@ export async function authRoutes(fastify: FastifyInstance) {
     // Generate tokens
     const accessToken = fastify.jwt.sign(
       { userId: user.id, email: user.email, role: user.role, jti },
-      { expiresIn: '7d' }
+      { expiresIn: '30m' }
     );
 
     const refreshToken = fastify.jwt.sign(
       { userId: user.id, type: 'refresh', jti: crypto.randomUUID() },
-      { expiresIn: '30d' }
+      { expiresIn: '7d' }
     );
 
     // Create session
@@ -861,7 +861,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         userId: user.id,
         token: accessToken,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
       },
     });
 
