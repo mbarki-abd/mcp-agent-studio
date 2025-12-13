@@ -28,6 +28,12 @@ import { auditModule } from './modules/audit';
 import { organizationModule } from './modules/organization';
 import { apiKeysModule } from './modules/apikeys';
 import { analyticsModule } from './modules/analytics';
+import { tokensModule } from './modules/tokens';
+import { credentialsModule } from './modules/credentials';
+import { workspacesModule } from './modules/workspaces';
+import { projectsModule } from './modules/projects';
+import { filesystemModule } from './modules/filesystem';
+import { provisioningModule } from './modules/provisioning';
 
 // Register modules (order matters for dependencies)
 moduleRegistry.register(serversModule);
@@ -40,6 +46,12 @@ moduleRegistry.register(auditModule);
 moduleRegistry.register(organizationModule);
 moduleRegistry.register(apiKeysModule);
 moduleRegistry.register(analyticsModule);
+moduleRegistry.register(tokensModule);
+moduleRegistry.register(credentialsModule);
+moduleRegistry.register(workspacesModule);
+moduleRegistry.register(projectsModule);
+moduleRegistry.register(filesystemModule);
+moduleRegistry.register(provisioningModule);
 
 // Public routes that don't require authentication
 const PUBLIC_ROUTES = ['/login', '/forgot-password', '/reset-password', '/verify-email'];
