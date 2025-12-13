@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Mail, Plus, X, Loader2, ArrowLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -54,7 +54,10 @@ export function InvitationsList() {
   }
 
   const invitations = data?.invitations || [];
-  const pendingInvitations = invitations.filter((i) => i.status === 'pending');
+  const pendingInvitations = useMemo(
+    () => invitations.filter((i) => i.status === 'pending'),
+    [invitations]
+  );
 
   return (
     <div className="space-y-6">

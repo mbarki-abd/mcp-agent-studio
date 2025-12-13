@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Server, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
@@ -20,10 +20,14 @@ export default function ServersList() {
 
   const servers = data?.items || [];
 
-  const filteredServers = servers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.url.toLowerCase().includes(search.toLowerCase())
+  const filteredServers = useMemo(
+    () =>
+      servers.filter(
+        (s) =>
+          s.name.toLowerCase().includes(search.toLowerCase()) ||
+          s.url.toLowerCase().includes(search.toLowerCase())
+      ),
+    [servers, search]
   );
 
   const handleDelete = async (id: string) => {

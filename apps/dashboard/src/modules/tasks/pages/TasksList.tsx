@@ -59,10 +59,14 @@ export default function TasksList() {
 
   const tasks = data?.items || [];
 
-  const filteredTasks = tasks.filter(
-    (t) =>
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      (t.description?.toLowerCase().includes(search.toLowerCase()) ?? false)
+  const filteredTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          t.title.toLowerCase().includes(search.toLowerCase()) ||
+          (t.description?.toLowerCase().includes(search.toLowerCase()) ?? false)
+      ),
+    [tasks, search]
   );
 
   // Check if any bulk operation is loading

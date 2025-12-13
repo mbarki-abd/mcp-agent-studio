@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Package, RefreshCw, AlertCircle, Filter, Search } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
@@ -35,31 +35,39 @@ export default function ToolsCatalog() {
   const { data: tools, isLoading, error, refetch } = useToolsCatalog();
   const { setSelectedTool } = useToolsStore();
 
-  const filteredTools = (tools || []).filter((tool) => {
-    // Category filter
-    if (category !== 'ALL' && tool.category !== category) return false;
+  const filteredTools = useMemo(
+    () =>
+      (tools || []).filter((tool) => {
+        // Category filter
+        if (category !== 'ALL' && tool.category !== category) return false;
 
-    // Search filter
-    if (search) {
-      const searchLower = search.toLowerCase();
-      return (
-        tool.name.toLowerCase().includes(searchLower) ||
-        tool.displayName.toLowerCase().includes(searchLower) ||
-        tool.description?.toLowerCase().includes(searchLower) ||
-        (tool.tags as string[])?.some((t) => t.toLowerCase().includes(searchLower))
-      );
-    }
+        // Search filter
+        if (search) {
+          const searchLower = search.toLowerCase();
+          return (
+            tool.name.toLowerCase().includes(searchLower) ||
+            tool.displayName.toLowerCase().includes(searchLower) ||
+            tool.description?.toLowerCase().includes(searchLower) ||
+            (tool.tags as string[])?.some((t) => t.toLowerCase().includes(searchLower))
+          );
+        }
 
-    return true;
-  });
+        return true;
+      }),
+    [tools, category, search]
+  );
 
   // Group tools by category
-  const groupedTools = filteredTools.reduce((acc, tool) => {
-    const cat = tool.category;
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(tool);
-    return acc;
-  }, {} as Record<ToolCategory, typeof filteredTools>);
+  const groupedTools = useMemo(
+    () =>
+      filteredTools.reduce((acc, tool) => {
+        const cat = tool.category;
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(tool);
+        return acc;
+      }, {} as Record<ToolCategory, typeof filteredTools>),
+    [filteredTools]
+  );
 
   if (error) {
     return (

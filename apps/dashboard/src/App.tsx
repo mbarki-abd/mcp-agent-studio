@@ -1,15 +1,20 @@
+import { lazy, Suspense } from 'react';
 import { Route, Navigate, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './core/auth';
 import { WebSocketProvider } from './core/websocket';
 import { ModuleLoader, moduleRegistry } from './core/modules';
-import { LoginPage } from './pages/Login';
-import { ForgotPasswordPage } from './pages/ForgotPassword';
-import { ResetPasswordPage } from './pages/ResetPassword';
-import { VerifyEmailPage } from './pages/VerifyEmail';
-import { SettingsPage } from './pages/Settings';
 import { DashboardLayout } from './components/layout/DashboardLayout';
-import Dashboard from './pages/Dashboard';
 import { Toaster } from './components/ui/toaster';
+
+// Lazy load auth pages
+const LoginPage = lazy(() => import('./pages/Login').then(m => ({ default: m.LoginPage })));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPassword').then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPasswordPage })));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmail').then(m => ({ default: m.VerifyEmailPage })));
+
+// Lazy load main pages
+const SettingsPage = lazy(() => import('./pages/Settings').then(m => ({ default: m.SettingsPage })));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 
 // Import modules
 import { serversModule } from './modules/servers';
@@ -60,19 +65,33 @@ function AppContent() {
     }
 
     return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      }>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
   // Not authenticated and not on public route - show login
   if (!isAuthenticated) {
-    return <LoginPage />;
+    return (
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      }>
+        <LoginPage />
+      </Suspense>
+    );
   }
 
   // Authenticated - show main app

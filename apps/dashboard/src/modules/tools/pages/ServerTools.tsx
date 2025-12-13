@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -54,26 +54,37 @@ export default function ServerTools() {
   const isLoading = isLoadingServer || isLoadingTools;
 
   // Create a map of installed tools
-  const installedToolIds = new Set(serverTools?.map((st) => st.toolId) || []);
+  const installedToolIds = useMemo(
+    () => new Set(serverTools?.map((st) => st.toolId) || []),
+    [serverTools]
+  );
 
   // Get tool definitions for installed tools
-  const installedToolsWithDefinition = serverTools?.map((st) => {
-    const definition = catalog?.find((t) => t.id === st.toolId);
-    return {
-      ...st,
-      definition,
-    };
-  }) || [];
+  const installedToolsWithDefinition = useMemo(
+    () =>
+      serverTools?.map((st) => {
+        const definition = catalog?.find((t) => t.id === st.toolId);
+        return {
+          ...st,
+          definition,
+        };
+      }) || [],
+    [serverTools, catalog]
+  );
 
   // Filter tools
-  const filteredTools = installedToolsWithDefinition.filter((tool) => {
-    if (!search) return true;
-    const searchLower = search.toLowerCase();
-    return (
-      tool.definition?.name.toLowerCase().includes(searchLower) ||
-      tool.definition?.displayName.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredTools = useMemo(
+    () =>
+      installedToolsWithDefinition.filter((tool) => {
+        if (!search) return true;
+        const searchLower = search.toLowerCase();
+        return (
+          tool.definition?.name.toLowerCase().includes(searchLower) ||
+          tool.definition?.displayName.toLowerCase().includes(searchLower)
+        );
+      }),
+    [installedToolsWithDefinition, search]
+  );
 
   if (isLoading) {
     return (

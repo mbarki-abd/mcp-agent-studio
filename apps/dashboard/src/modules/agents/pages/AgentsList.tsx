@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Bot, RefreshCw, AlertCircle, Filter, LayoutGrid, GitBranch } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
@@ -59,10 +59,14 @@ export default function AgentsList() {
 
   useAgentStatus(handleStatusUpdate);
 
-  const filteredAgents = agents.filter(
-    (a) =>
-      a.displayName.toLowerCase().includes(search.toLowerCase()) ||
-      a.name.toLowerCase().includes(search.toLowerCase())
+  const filteredAgents = useMemo(
+    () =>
+      agents.filter(
+        (a) =>
+          a.displayName.toLowerCase().includes(search.toLowerCase()) ||
+          a.name.toLowerCase().includes(search.toLowerCase())
+      ),
+    [agents, search]
   );
 
   const handleDelete = async (id: string) => {
