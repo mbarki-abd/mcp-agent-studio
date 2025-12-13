@@ -2,6 +2,7 @@ import * as React from 'react';
 import * as ToastPrimitive from '@radix-ui/react-toast';
 import { cn } from '../../lib/utils';
 import { X } from 'lucide-react';
+import { useToast } from '../../lib/use-toast';
 
 const ToastProvider = ToastPrimitive.Provider;
 
@@ -81,8 +82,25 @@ const ToastDescription = React.forwardRef<
 ToastDescription.displayName = ToastPrimitive.Description.displayName;
 
 export function Toaster() {
+  const { toasts, dismiss } = useToast();
+
   return (
     <ToastProvider>
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          className={toast.variant === 'destructive' ? 'border-red-500 bg-red-50 dark:bg-red-950' : ''}
+          onOpenChange={(open) => {
+            if (!open) dismiss(toast.id);
+          }}
+        >
+          <div className="grid gap-1">
+            {toast.title && <ToastTitle>{toast.title}</ToastTitle>}
+            {toast.description && <ToastDescription>{toast.description}</ToastDescription>}
+          </div>
+          <ToastClose />
+        </Toast>
+      ))}
       <ToastViewport />
     </ToastProvider>
   );

@@ -5,6 +5,7 @@ import { WebSocketProvider } from './core/websocket';
 import { ModuleLoader, moduleRegistry } from './core/modules';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Toaster } from './components/ui/toaster';
+import { ToastProvider } from './lib/use-toast';
 
 // Lazy load auth pages
 const LoginPage = lazy(() => import('./pages/Login').then(m => ({ default: m.LoginPage })));
@@ -111,8 +112,10 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
-      <Toaster />
+      <ToastProvider>
+        <AppContent />
+        <Toaster />
+      </ToastProvider>
     </AuthProvider>
   );
 }

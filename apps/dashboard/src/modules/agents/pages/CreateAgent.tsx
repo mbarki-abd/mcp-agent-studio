@@ -31,6 +31,7 @@ import {
   useAgents,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
+import { useToast } from '../../../lib/use-toast';
 import type { AgentRole } from '@mcp/types';
 
 const agentSchema = z.object({
@@ -212,6 +213,7 @@ export default function CreateAgent() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditing = !!id;
+  const { toast } = useToast();
 
   // Get pre-selected server and supervisor from URL params
   const preSelectedServerId = searchParams.get('serverId');
@@ -326,6 +328,11 @@ export default function CreateAgent() {
       navigate('/agents');
     } catch (error) {
       console.error('Failed to save agent:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save agent. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

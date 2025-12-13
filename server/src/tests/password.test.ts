@@ -16,31 +16,31 @@ describe('Password Utils', () => {
   });
 
   describe('hashPassword', () => {
-    it('should hash password using bcrypt with 12 salt rounds', async () => {
+    it('should hash password using bcrypt with 14 salt rounds', async () => {
       // Arrange
       const password = 'mySecurePassword123!';
-      const expectedHash = '$2a$12$hashedPassword';
+      const expectedHash = '$2a$14$hashedPassword';
       vi.mocked(bcrypt.hash).mockResolvedValue(expectedHash as never);
 
       // Act
       const result = await hashPassword(password);
 
       // Assert
-      expect(bcrypt.hash).toHaveBeenCalledWith(password, 12);
+      expect(bcrypt.hash).toHaveBeenCalledWith(password, 14);
       expect(result).toBe(expectedHash);
     });
 
     it('should handle empty password', async () => {
       // Arrange
       const password = '';
-      const expectedHash = '$2a$12$emptyHash';
+      const expectedHash = '$2a$14$emptyHash';
       vi.mocked(bcrypt.hash).mockResolvedValue(expectedHash as never);
 
       // Act
       const result = await hashPassword(password);
 
       // Assert
-      expect(bcrypt.hash).toHaveBeenCalledWith(password, 12);
+      expect(bcrypt.hash).toHaveBeenCalledWith(password, 14);
       expect(result).toBe(expectedHash);
     });
 

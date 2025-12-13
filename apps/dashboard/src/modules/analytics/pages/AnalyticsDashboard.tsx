@@ -16,11 +16,13 @@ import { MetricCard } from '../components/MetricCard';
 import { TrendChart } from '../components/TrendChart';
 import { DistributionChart } from '../components/DistributionChart';
 import { TopAgentsTable } from '../components/TopAgentsTable';
+import { useToast } from '../../../lib/use-toast';
 
 export default function AnalyticsDashboard() {
   const [period, setPeriod] = useState(30);
   const { data: analytics, isLoading, refetch, isRefetching } = useAnalyticsOverview(period);
   const exportMutation = useExportAnalytics();
+  const { toast } = useToast();
 
   const handleExport = async () => {
     try {
@@ -34,6 +36,11 @@ export default function AnalyticsDashboard() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
+      toast({
+        title: 'Export Failed',
+        description: 'Failed to export analytics data. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

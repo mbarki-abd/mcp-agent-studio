@@ -34,6 +34,11 @@ vi.mock('../index.js', () => ({
   },
 }));
 
+// Mock master-agent.service
+vi.mock('../services/master-agent.service.js', () => ({
+  getMasterAgentService: vi.fn(),
+}));
+
 describe('ToolsService', () => {
   let service: ToolsService;
   let mockPrismaToolDefinition: any;
@@ -41,6 +46,7 @@ describe('ToolsService', () => {
   let mockPrismaServerTool: any;
   let mockPrismaAgent: any;
   let mockPrismaAgentToolPermission: any;
+  let mockGetMasterAgentService: any;
 
   const mockToolDefinition: ToolDefinition = {
     id: 'tool-1',
@@ -87,6 +93,10 @@ describe('ToolsService', () => {
     mockPrismaServerTool = prisma.serverTool;
     mockPrismaAgent = prisma.agent;
     mockPrismaAgentToolPermission = prisma.agentToolPermission;
+
+    // Get reference to mocked master-agent service
+    const masterAgentModule = await import('../services/master-agent.service.js');
+    mockGetMasterAgentService = masterAgentModule.getMasterAgentService;
 
     service = new ToolsService();
   });
@@ -383,6 +393,15 @@ describe('ToolsService', () => {
         healthStatus: 'HEALTHY',
         lastHealthCheck: new Date(),
       });
+
+      // Mock master agent service to return successful health check
+      const mockMasterService = {
+        executePrompt: vi.fn().mockResolvedValue({
+          success: true,
+          output: 'git version 2.34.1',
+        }),
+      };
+      mockGetMasterAgentService.mockResolvedValue(mockMasterService);
 
       const result = await service.checkToolHealth('server-1', 'tool-1', 'user-1');
 

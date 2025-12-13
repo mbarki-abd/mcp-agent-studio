@@ -31,6 +31,7 @@ import {
   useServer,
 } from '../../../core/api';
 import { cn } from '../../../lib/utils';
+import { useToast } from '../../../lib/use-toast';
 import type { Priority, ExecutionMode, AssignmentMode, RecurrenceFreq } from '@mcp/types';
 
 const taskSchema = z.object({
@@ -104,6 +105,7 @@ export default function CreateTask() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEditing = !!id;
+  const { toast } = useToast();
 
   // Get pre-selected agent and server from URL params
   const preSelectedAgentId = searchParams.get('agentId');
@@ -232,6 +234,11 @@ export default function CreateTask() {
       navigate('/tasks');
     } catch (error) {
       console.error('Failed to save task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save task. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 

@@ -8,6 +8,7 @@ import { Step2Validation } from './Step2Validation';
 import { Step3Tools } from './Step3Tools';
 import { Step4Agent } from './Step4Agent';
 import { useCreateServer, useCreateAgent, useInstallTool } from '../../../../core/api/hooks';
+import { useToast } from '../../../../lib/use-toast';
 
 const STEPS = [
   { number: 1, title: 'Basics', icon: Server },
@@ -21,6 +22,7 @@ function WizardContent() {
   const { step, data, nextStep, prevStep, canProceed, isLastStep, setCreatedServerId } = useWizard();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const createServer = useCreateServer();
   const createAgent = useCreateAgent();
@@ -58,6 +60,11 @@ function WizardContent() {
           data.selectedTools.map((toolId) =>
             installTool.mutateAsync({ serverId, toolId }).catch((err) => {
               console.error(`Failed to install tool ${toolId}:`, err);
+              toast({
+                title: 'Tool Installation Warning',
+                description: `Failed to install tool ${toolId}. Server was created successfully.`,
+                variant: 'destructive',
+              });
               // Don't fail the whole process for tool installation errors
             })
           )
