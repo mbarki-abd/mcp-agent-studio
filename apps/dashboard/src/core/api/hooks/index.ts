@@ -33,6 +33,17 @@ export {
 } from './servers';
 export type { ServerValidationResult, ServerHealthApiResponse, ServerStatsApiResponse } from './servers';
 
+// Health monitoring hooks (remote server probes)
+export {
+  useServerHealthCheck,
+  useServerLiveness,
+  useServerReadiness,
+  useServerStartup,
+  useServerMetrics,
+  useCombinedServerHealth,
+} from './health';
+export type { HealthCheck, ProbeResponse, PrometheusMetrics } from './health';
+
 // Agent hooks
 export {
   useAgents,
@@ -175,3 +186,21 @@ export type {
   ExecutionAnalytics,
   AnalyticsOverview,
 } from './misc';
+
+// Presence hooks
+export {
+  usePresenceServer,
+  usePresenceAgents,
+  usePresenceStats,
+  usePresenceStatus,
+  useMasterConnectionState,
+  useReconnectToMaster,
+  presenceQueryKeys,
+} from './presence';
+export type {
+  ServerPresence,
+  AgentPresence,
+  PresenceStats,
+  MasterConnectionState,
+  PresenceStatus,
+} from './presence';
