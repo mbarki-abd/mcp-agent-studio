@@ -304,22 +304,57 @@ export async function toolRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: 'Tool not installed on this server' });
     }
 
-    // TODO: Execute health check via master agent
+    // Execute health check via master agent
+    try {
+      const { getMasterAgentService } = await import('../services/master-agent.service.js');
+      const masterService = await getMasterAgentService(serverId);
 
-    // For now, just update the timestamp
-    await prisma.serverTool.update({
-      where: { id: serverTool.id },
-      data: {
+      // Use master agent to run health check via MCP client
+      const healthCheckPrompt = `Check if the tool "${serverTool.tool.name}" is properly installed and working. Run: ${serverTool.tool.versionCommand || `which ${serverTool.tool.name}`}`;
+
+      const result = await masterService.executePrompt(healthCheckPrompt);
+
+      const healthStatus = result.success ? 'HEALTHY' : 'UNHEALTHY';
+      const lastError = result.success ? null : (result.error || 'Health check failed');
+
+      // Update health status in database
+      await prisma.serverTool.update({
+        where: { id: serverTool.id },
+        data: {
+          lastHealthCheck: new Date(),
+          healthStatus,
+          lastError,
+        },
+      });
+
+      return {
+        toolName: serverTool.tool.name,
+        healthStatus,
         lastHealthCheck: new Date(),
-        healthStatus: 'HEALTHY',
-      },
-    });
+        output: result.output,
+        error: lastError,
+      };
+    } catch (error) {
+      // Log error and mark as unhealthy
+      fastify.log.error({ err: error, serverId, toolId }, 'Failed to run health check via master agent');
 
-    return {
-      toolName: serverTool.tool.name,
-      healthStatus: 'HEALTHY',
-      lastHealthCheck: new Date(),
-    };
+      // Update to unhealthy status
+      await prisma.serverTool.update({
+        where: { id: serverTool.id },
+        data: {
+          lastHealthCheck: new Date(),
+          healthStatus: 'UNHEALTHY',
+          lastError: error instanceof Error ? error.message : 'Health check failed',
+        },
+      });
+
+      return {
+        toolName: serverTool.tool.name,
+        healthStatus: 'UNHEALTHY',
+        lastHealthCheck: new Date(),
+        error: error instanceof Error ? error.message : 'Health check failed',
+      };
+    }
   });
 
   // Get agent tool permissions (org visible)

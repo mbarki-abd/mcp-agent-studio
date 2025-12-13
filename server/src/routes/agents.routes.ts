@@ -346,23 +346,41 @@ export async function agentRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Agent is not pending validation' });
     }
 
-    // TODO: Execute creation on server via master agent
+    // Execute creation on server via master agent
+    try {
+      const { getMasterAgentService } = await import('../services/master-agent.service.js');
+      const masterService = await getMasterAgentService(agent.serverId);
 
-    const updated = await prisma.agent.update({
-      where: { id },
-      data: {
-        status: 'ACTIVE',
-        validatedById: userId,
-        validatedAt: new Date(),
-      },
-    });
+      // Use master agent to provision and validate the agent on the server
+      const validatedAgent = await masterService.validateAgent(id, userId);
 
-    return {
-      id: updated.id,
-      name: updated.name,
-      status: updated.status,
-      message: 'Agent validated and activated',
-    };
+      return {
+        id: validatedAgent.id,
+        name: validatedAgent.name,
+        status: validatedAgent.status,
+        message: 'Agent validated and activated on server',
+      };
+    } catch (error) {
+      // Log error but allow fallback to database-only update
+      fastify.log.error({ err: error, agentId: id }, 'Failed to validate agent via master agent, using fallback');
+
+      // Fallback: Update database directly if master agent call fails
+      const updated = await prisma.agent.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+          validatedById: userId,
+          validatedAt: new Date(),
+        },
+      });
+
+      return {
+        id: updated.id,
+        name: updated.name,
+        status: updated.status,
+        message: 'Agent validated (fallback mode - verification on server may be needed)',
+      };
+    }
   });
 
   // Get agent hierarchy

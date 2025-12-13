@@ -198,7 +198,7 @@ export class AuthService {
   private generateTokens(user: { id: string; email: string; role: string }) {
     const token = this.fastify.jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
-      { expiresIn: '7d' }
+      { expiresIn: '30m' }
     );
 
     const refreshToken = this.fastify.jwt.sign(

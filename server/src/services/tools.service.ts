@@ -203,21 +203,57 @@ export class ToolsService {
       throw new Error('Tool not installed on this server');
     }
 
-    // TODO: Execute health check via master agent
-    // For now, just update the timestamp
-    await prisma.serverTool.update({
-      where: { id: serverTool.id },
-      data: {
-        lastHealthCheck: new Date(),
-        healthStatus: 'HEALTHY',
-      },
-    });
+    // Execute health check via master agent
+    try {
+      const { getMasterAgentService } = await import('./master-agent.service.js');
+      const masterService = await getMasterAgentService(serverId);
 
-    return {
-      toolName: serverTool.tool.name,
-      healthStatus: 'HEALTHY' as HealthStatus,
-      lastHealthCheck: new Date(),
-    };
+      // Use master agent to run health check via MCP client
+      const healthCheckPrompt = `Check if the tool "${serverTool.tool.name}" is properly installed and working. Run: ${serverTool.tool.versionCommand || `which ${serverTool.tool.name}`}`;
+
+      const result = await masterService.executePrompt(healthCheckPrompt);
+
+      const healthStatus = result.success ? 'HEALTHY' : 'UNHEALTHY';
+      const lastError = result.success ? null : (result.error || 'Health check failed');
+
+      // Update health status in database
+      await prisma.serverTool.update({
+        where: { id: serverTool.id },
+        data: {
+          lastHealthCheck: new Date(),
+          healthStatus: healthStatus as HealthStatus,
+          lastError,
+        },
+      });
+
+      return {
+        toolName: serverTool.tool.name,
+        healthStatus: healthStatus as HealthStatus,
+        lastHealthCheck: new Date(),
+        output: result.output,
+        error: lastError || undefined,
+      };
+    } catch (error) {
+      // Log error and mark as unhealthy
+      const lastError = error instanceof Error ? error.message : 'Health check failed';
+
+      // Update to unhealthy status
+      await prisma.serverTool.update({
+        where: { id: serverTool.id },
+        data: {
+          lastHealthCheck: new Date(),
+          healthStatus: 'UNHEALTHY' as HealthStatus,
+          lastError,
+        },
+      });
+
+      return {
+        toolName: serverTool.tool.name,
+        healthStatus: 'UNHEALTHY' as HealthStatus,
+        lastHealthCheck: new Date(),
+        error: lastError,
+      };
+    }
   }
 
   async getAgentPermissions(agentId: string, userId: string) {

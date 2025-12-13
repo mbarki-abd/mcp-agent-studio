@@ -1,0 +1,184 @@
+{
+  "@context": {
+    "@vocab": "https://godmode.mbarki.dev/schema/",
+    "name": "http://schema.org/name",
+    "description": "http://schema.org/description",
+    "version": "http://schema.org/version",
+    "dependsOn": "http://schema.org/dependencies",
+    "module": "https://godmode.mbarki.dev/schema/module",
+    "service": "https://godmode.mbarki.dev/schema/service",
+    "technology": "https://godmode.mbarki.dev/schema/technology"
+  },
+  "@graph": [
+    {
+      "@id": "project:mcp-agent-studio",
+      "@type": "SoftwareProject",
+      "name": "mcp-agent-studio",
+      "version": "0.1.0",
+      "description": "Multi-Agent Orchestration Platform for AI Development Teams",
+      "author": "mbarki <mbark@ilinqsoft.com>",
+      "architecture": "Monorepo",
+      "buildSystem": "Turborepo",
+      "packageManager": "pnpm@9.15.0",
+      "modules": [
+        { "@id": "module:dashboard" },
+        { "@id": "module:server" },
+        { "@id": "module:types" }
+      ]
+    },
+    {
+      "@id": "module:dashboard",
+      "@type": "FrontendModule",
+      "name": "dashboard",
+      "description": "React 18 dashboard with modular architecture",
+      "technology": [
+        { "@id": "tech:react" },
+        { "@id": "tech:vite" },
+        { "@id": "tech:typescript" },
+        { "@id": "tech:tailwind" },
+        { "@id": "tech:tanstack-query" }
+      ],
+      "features": [
+        { "@id": "feature:servers-module", "name": "Server Management" },
+        { "@id": "feature:agents-module", "name": "Agent Lifecycle Management" },
+        { "@id": "feature:tasks-module", "name": "Task Scheduling & Monitoring" },
+        { "@id": "feature:monitoring-module", "name": "Real-time Monitoring" },
+        { "@id": "feature:tools-module", "name": "Tool Catalog & Permissions" },
+        { "@id": "feature:chat-module", "name": "Agent Chat Interface" }
+      ],
+      "dependsOn": [
+        { "@id": "module:types" }
+      ]
+    },
+    {
+      "@id": "module:server",
+      "@type": "BackendModule",
+      "name": "server",
+      "description": "Fastify API server with MCP client integration",
+      "technology": [
+        { "@id": "tech:fastify" },
+        { "@id": "tech:nodejs" },
+        { "@id": "tech:prisma" },
+        { "@id": "tech:postgresql" },
+        { "@id": "tech:redis" },
+        { "@id": "tech:bullmq" },
+        { "@id": "tech:socketio" }
+      ],
+      "services": [
+        { "@id": "service:auth", "name": "Authentication Service", "tech": "JWT + CASL" },
+        { "@id": "service:agents", "name": "Agent Service", "tech": "Prisma ORM" },
+        { "@id": "service:master-agent", "name": "Master Agent Service", "tech": "MCP Client" },
+        { "@id": "service:scheduler", "name": "Scheduler Service", "tech": "BullMQ" },
+        { "@id": "service:monitoring", "name": "Monitoring Service", "tech": "Socket.IO" }
+      ],
+      "dependsOn": [
+        { "@id": "module:types" },
+        { "@id": "infrastructure:postgresql" },
+        { "@id": "infrastructure:redis" }
+      ]
+    },
+    {
+      "@id": "module:types",
+      "@type": "SharedModule",
+      "name": "@mcp/types",
+      "description": "Shared TypeScript types for frontend and backend",
+      "technology": [
+        { "@id": "tech:typescript" }
+      ]
+    },
+    {
+      "@id": "tech:react",
+      "@type": "Technology",
+      "name": "React",
+      "version": "18.2"
+    },
+    {
+      "@id": "tech:vite",
+      "@type": "Technology",
+      "name": "Vite",
+      "version": "5.0"
+    },
+    {
+      "@id": "tech:typescript",
+      "@type": "Technology",
+      "name": "TypeScript",
+      "version": "5.3"
+    },
+    {
+      "@id": "tech:fastify",
+      "@type": "Technology",
+      "name": "Fastify",
+      "version": "4.26"
+    },
+    {
+      "@id": "tech:nodejs",
+      "@type": "Technology",
+      "name": "Node.js",
+      "version": "20+"
+    },
+    {
+      "@id": "tech:prisma",
+      "@type": "Technology",
+      "name": "Prisma ORM",
+      "version": "5.9"
+    },
+    {
+      "@id": "tech:postgresql",
+      "@type": "Technology",
+      "name": "PostgreSQL",
+      "version": "16"
+    },
+    {
+      "@id": "tech:redis",
+      "@type": "Technology",
+      "name": "Redis",
+      "version": "7"
+    },
+    {
+      "@id": "tech:bullmq",
+      "@type": "Technology",
+      "name": "BullMQ",
+      "version": "5.65"
+    },
+    {
+      "@id": "tech:socketio",
+      "@type": "Technology",
+      "name": "Socket.IO",
+      "version": "4.8"
+    },
+    {
+      "@id": "tech:tailwind",
+      "@type": "Technology",
+      "name": "Tailwind CSS",
+      "version": "3.4"
+    },
+    {
+      "@id": "tech:tanstack-query",
+      "@type": "Technology",
+      "name": "TanStack Query",
+      "version": "5.17"
+    },
+    {
+      "@id": "infrastructure:postgresql",
+      "@type": "Infrastructure",
+      "name": "PostgreSQL Database",
+      "role": "Primary data store",
+      "port": 5432
+    },
+    {
+      "@id": "infrastructure:redis",
+      "@type": "Infrastructure",
+      "name": "Redis Cache",
+      "role": "Session cache, job queue",
+      "port": 6379
+    },
+    {
+      "@id": "deployment:docker",
+      "@type": "DeploymentTarget",
+      "name": "Docker Compose",
+      "services": ["traefik", "postgres", "redis", "server", "dashboard"],
+      "provider": "Hetzner",
+      "reverseProxy": "Traefik 3.0"
+    }
+  ]
+}

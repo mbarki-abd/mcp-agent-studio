@@ -11,8 +11,14 @@ import { prisma } from '../index.js';
 import crypto from 'crypto';
 import { auditLogger } from '../utils/logger.js';
 
-// Secret key for HMAC (in production, use env variable)
-const AUDIT_INTEGRITY_SECRET = process.env.AUDIT_INTEGRITY_SECRET || 'audit-integrity-secret-change-in-production';
+// Secret key for HMAC - required in production, fallback only for development
+const isProduction = process.env.NODE_ENV === 'production';
+const AUDIT_INTEGRITY_SECRET = process.env.AUDIT_INTEGRITY_SECRET || (() => {
+  if (isProduction) {
+    throw new Error('AUDIT_INTEGRITY_SECRET environment variable is required in production');
+  }
+  return 'dev-audit-integrity-secret-change-in-production';
+})();
 
 export interface AuditEntry {
   userId?: string;
