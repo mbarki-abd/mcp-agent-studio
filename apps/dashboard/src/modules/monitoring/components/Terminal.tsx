@@ -90,16 +90,23 @@ export function Terminal({
       term.write(initialContent);
     }
 
-    // Handle window resize
-    const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
-      }
+    // Debounce helper (16ms = 1 frame at 60fps)
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFit = () => {
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+        }
+      }, 16);
     };
-    window.addEventListener('resize', handleResize);
+
+    // Handle window resize with debounce
+    window.addEventListener('resize', debouncedFit);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', debouncedFit);
       term.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;

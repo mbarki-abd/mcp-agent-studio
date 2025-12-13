@@ -11,6 +11,7 @@ import {
   buildOrderBy,
   validateSortField,
 } from '../utils/pagination.js';
+import { getCacheService, CacheService } from '../services/cache.service.js';
 
 // Allowed sort fields for tools
 const TOOL_SORT_FIELDS = ['name', 'displayName', 'category'];
@@ -68,6 +69,28 @@ export async function toolRoutes(fastify: FastifyInstance) {
     const pagination = parsePagination(query);
     const validSortBy = validateSortField(pagination.sortBy, TOOL_SORT_FIELDS);
 
+    // Build cache key from query parameters
+    const cache = getCacheService();
+    const cacheParams = JSON.stringify({
+      page: pagination.page,
+      limit: pagination.limit,
+      sortBy: validSortBy,
+      sortOrder: pagination.sortOrder,
+      category: query.category,
+      search: query.search,
+    });
+    const cacheKey = CacheService.keys.toolDefinitions(cacheParams);
+
+    // Try to get from cache
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      fastify.log.debug({ cacheKey }, 'Cache HIT - tool definitions');
+      return cached;
+    }
+
+    // Cache miss - fetch from database
+    fastify.log.debug({ cacheKey }, 'Cache MISS - tool definitions');
+
     // Build where clause
     const where: Prisma.ToolDefinitionWhereInput = {};
     if (query.category) {
@@ -104,7 +127,12 @@ export async function toolRoutes(fastify: FastifyInstance) {
       requiresSudo: t.requiresSudo,
     }));
 
-    return buildPaginatedResponse(data, total, pagination.page, pagination.limit);
+    const response = buildPaginatedResponse(data, total, pagination.page, pagination.limit);
+
+    // Cache for 1 hour (3600 seconds) - tool definitions are relatively static
+    await cache.set(cacheKey, response, 3600);
+
+    return response;
   });
 
   // Get tools installed on a server (org visible)
@@ -509,6 +537,10 @@ export async function toolRoutes(fastify: FastifyInstance) {
         update: {},
       });
     }
+
+    // Invalidate tool definitions cache
+    const cache = getCacheService();
+    await cache.invalidate(CacheService.keys.toolDefinitionsPattern());
 
     return { message: `Seeded ${defaultTools.length} tool definitions` };
   });

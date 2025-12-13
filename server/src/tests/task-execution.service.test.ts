@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TaskExecutionService } from '../services/task-execution.service.js';
 import { prisma } from '../index.js';
-import { getMasterAgentService } from '../services/master-agent.service.js';
+import { getMasterAgentService, type StreamCallback } from '../services/master-agent.service.js';
 import { MonitoringService } from '../services/monitoring.service.js';
 import { getScheduler } from '../services/scheduler.service.js';
 
@@ -121,8 +121,8 @@ describe('TaskExecutionService', () => {
       vi.mocked(prisma.taskExecution.update).mockResolvedValue(mockExecution as any);
       vi.mocked(prisma.agent.update).mockResolvedValue(mockTask.agent as any);
 
-      mockMasterAgentService.executePrompt.mockImplementation((prompt, agentId, cbs) => {
-        cbs.onOutput?.('Task completed');
+      mockMasterAgentService.executePrompt.mockImplementation((prompt: string, agentId?: string, cbs?: StreamCallback) => {
+        cbs?.onOutput?.('Task completed');
         return Promise.resolve({
           success: true,
           output: 'Task completed',
@@ -357,9 +357,9 @@ describe('TaskExecutionService', () => {
       vi.mocked(prisma.taskExecution.update).mockResolvedValue({} as any);
       vi.mocked(prisma.agent.update).mockResolvedValue({} as any);
 
-      mockMasterAgentService.executePrompt.mockImplementation((prompt, agentId, cbs) => {
-        cbs.onOutput?.('chunk1');
-        cbs.onOutput?.('chunk2');
+      mockMasterAgentService.executePrompt.mockImplementation((prompt: string, agentId?: string, cbs?: StreamCallback) => {
+        cbs?.onOutput?.('chunk1');
+        cbs?.onOutput?.('chunk2');
         return Promise.resolve({ success: true, output: 'Done' });
       });
 

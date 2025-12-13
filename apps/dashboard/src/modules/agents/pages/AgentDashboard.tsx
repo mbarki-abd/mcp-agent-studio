@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -132,12 +132,18 @@ export default function AgentDashboard() {
     refetch();
   };
 
-  // Calculate stats
-  const completedTasks = tasks.filter((t) => t.status === 'COMPLETED').length;
-  const failedTasks = tasks.filter((t) => t.status === 'FAILED').length;
-  const runningTasks = tasks.filter((t) => t.status === 'RUNNING').length;
-  const pendingTasks = tasks.filter((t) => ['PENDING', 'SCHEDULED'].includes(t.status)).length;
-  const successRate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+  // Calculate stats (memoized to avoid recalculation on every render)
+  const stats = useMemo(() => {
+    const completedTasks = tasks.filter((t) => t.status === 'COMPLETED').length;
+    const failedTasks = tasks.filter((t) => t.status === 'FAILED').length;
+    const runningTasks = tasks.filter((t) => t.status === 'RUNNING').length;
+    const pendingTasks = tasks.filter((t) => ['PENDING', 'SCHEDULED'].includes(t.status)).length;
+    const successRate = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
+
+    return { completedTasks, failedTasks, runningTasks, pendingTasks, successRate };
+  }, [tasks]);
+
+  const { completedTasks, failedTasks, runningTasks, pendingTasks, successRate } = stats;
 
   if (isLoading) {
     return (
@@ -359,15 +365,16 @@ export default function AgentDashboard() {
   );
 }
 
-// Overview Tab Component
-function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
+// Overview Tab Component (memoized for performance)
+const OverviewTab = memo(function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
   agent: Agent;
   server: ServerConfiguration | undefined;
   supervisorData: Agent | undefined;
   subordinates: Agent[];
   tasks: Task[];
 }) {
-  const recentTasks = tasks.slice(0, 5);
+  // Memoize recent tasks to avoid re-slicing on every render
+  const recentTasks = useMemo(() => tasks.slice(0, 5), [tasks]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -559,25 +566,27 @@ function OverviewTab({ agent, server, supervisorData, subordinates, tasks }: {
       </div>
     </div>
   );
-}
+});
 
-// Tasks Tab Component
-function TasksTab({ tasks, agentId }: { tasks: Task[]; agentId: string }) {
+// Tasks Tab Component (memoized for performance)
+const TasksTab = memo(function TasksTab({ tasks, agentId }: { tasks: Task[]; agentId: string }) {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<string>('all');
 
-  const filteredTasks = tasks.filter((t: Task) => {
-    if (filter === 'all') return true;
-    return t.status === filter;
-  });
+  // Memoize filtered tasks to avoid re-filtering on every render
+  const filteredTasks = useMemo(() => {
+    if (filter === 'all') return tasks;
+    return tasks.filter((t: Task) => t.status === filter);
+  }, [tasks, filter]);
 
-  const statusCounts = {
+  // Memoize status counts to avoid recalculation
+  const statusCounts = useMemo(() => ({
     all: tasks.length,
     PENDING: tasks.filter((t) => t.status === 'PENDING').length,
     RUNNING: tasks.filter((t) => t.status === 'RUNNING').length,
     COMPLETED: tasks.filter((t) => t.status === 'COMPLETED').length,
     FAILED: tasks.filter((t) => t.status === 'FAILED').length,
-  };
+  }), [tasks]);
 
   return (
     <div className="space-y-4">
@@ -645,28 +654,35 @@ function TasksTab({ tasks, agentId }: { tasks: Task[]; agentId: string }) {
       )}
     </div>
   );
-}
+});
 
-// Tools Tab Component
-function ToolsTab({ permissions, allTools, agentId }: {
+// Tools Tab Component (memoized for performance)
+const ToolsTab = memo(function ToolsTab({ permissions, allTools, agentId }: {
   permissions: AgentToolPermission[];
   allTools: ToolDefinition[];
   agentId: string;
 }) {
   const navigate = useNavigate();
-  const permittedToolIds = new Set(permissions.map((p: AgentToolPermission) => p.tool.id));
 
-  // Group tools by category
-  const toolsByCategory = allTools.reduce((acc: Record<string, (ToolDefinition & { hasPermission: boolean; permission?: AgentToolPermission })[]>, tool: ToolDefinition) => {
-    const cat = tool.category || 'UTILITY';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push({
-      ...tool,
-      hasPermission: permittedToolIds.has(tool.id),
-      permission: permissions.find((p) => p.tool.id === tool.id),
-    });
-    return acc;
-  }, {});
+  // Memoize permitted tool IDs set
+  const permittedToolIds = useMemo(
+    () => new Set(permissions.map((p: AgentToolPermission) => p.tool.id)),
+    [permissions]
+  );
+
+  // Memoize tools by category to avoid re-computation
+  const toolsByCategory = useMemo(() => {
+    return allTools.reduce((acc: Record<string, (ToolDefinition & { hasPermission: boolean; permission?: AgentToolPermission })[]>, tool: ToolDefinition) => {
+      const cat = tool.category || 'UTILITY';
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push({
+        ...tool,
+        hasPermission: permittedToolIds.has(tool.id),
+        permission: permissions.find((p) => p.tool.id === tool.id),
+      });
+      return acc;
+    }, {});
+  }, [allTools, permittedToolIds, permissions]);
 
   return (
     <div className="space-y-6">
@@ -729,15 +745,18 @@ function ToolsTab({ permissions, allTools, agentId }: {
       ))}
     </div>
   );
-}
+});
 
-// Chat Tab Component
-function ChatTab({ messages, agentId, agentName }: {
+// Chat Tab Component (memoized for performance)
+const ChatTab = memo(function ChatTab({ messages, agentId, agentName }: {
   messages: Array<{ id: string; role: string; content: string; timestamp: string | Date }>;
   agentId: string;
   agentName: string;
 }) {
   const navigate = useNavigate();
+
+  // Memoize recent messages to avoid re-slicing on every render
+  const recentMessages = useMemo(() => messages.slice(-20), [messages]);
 
   return (
     <div className="space-y-4">
@@ -761,7 +780,7 @@ function ChatTab({ messages, agentId, agentName }: {
         </div>
       ) : (
         <div className="border rounded-lg divide-y max-h-[500px] overflow-y-auto">
-          {messages.slice(-20).map((msg) => (
+          {recentMessages.map((msg) => (
             <div key={msg.id} className="p-4">
               <div className="flex items-center gap-2 mb-1">
                 <span className={cn(
@@ -785,16 +804,17 @@ function ChatTab({ messages, agentId, agentName }: {
       )}
     </div>
   );
-}
+});
 
-// Activity Tab Component
-function ActivityTab({ agentId: _agentId }: { agentId: string }) {
+// Activity Tab Component (memoized for performance)
+const ActivityTab = memo(function ActivityTab({ agentId: _agentId }: { agentId: string }) {
   // This would normally fetch from an activity/audit log API
-  const activities = [
+  // Memoize static activities to avoid re-creating on every render
+  const activities = useMemo(() => [
     { id: 1, type: 'task_completed', message: 'Completed task "Review PR #142"', timestamp: new Date() },
     { id: 2, type: 'status_change', message: 'Status changed to ACTIVE', timestamp: new Date(Date.now() - 3600000) },
     { id: 3, type: 'task_started', message: 'Started task "Write unit tests"', timestamp: new Date(Date.now() - 7200000) },
-  ];
+  ], []);
 
   return (
     <div className="space-y-4">
@@ -819,10 +839,10 @@ function ActivityTab({ agentId: _agentId }: { agentId: string }) {
       </div>
     </div>
   );
-}
+});
 
-// Helper component
-function TaskStatusBadge({ status }: { status: string }) {
+// Helper component (memoized to prevent re-renders with same status)
+const TaskStatusBadge = memo(function TaskStatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
@@ -838,4 +858,4 @@ function TaskStatusBadge({ status }: { status: string }) {
       {status.toLowerCase()}
     </span>
   );
-}
+});

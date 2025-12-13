@@ -6,7 +6,7 @@ import type { Agent, ServerConfiguration } from '@prisma/client';
 import { masterAgentLogger } from '../utils/logger.js';
 
 // Types for execution
-interface ExecutionResult {
+export interface ExecutionResult {
   success: boolean;
   output?: string;
   error?: string;
@@ -14,7 +14,7 @@ interface ExecutionResult {
   durationMs?: number;
 }
 
-interface StreamCallback {
+export interface StreamCallback {
   onStart?: () => void;
   onOutput?: (chunk: string) => void;
   onToolCall?: (name: string, params: Record<string, unknown>) => void;

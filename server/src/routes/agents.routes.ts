@@ -10,6 +10,7 @@ import {
   buildOrderBy,
   validateSortField,
 } from '../utils/pagination.js';
+import { getCacheService, CacheService } from '../services/cache.service.js';
 
 // Allowed sort fields for agents
 const AGENT_SORT_FIELDS = ['createdAt', 'updatedAt', 'name', 'displayName', 'status', 'role'];
@@ -75,6 +76,30 @@ export async function agentRoutes(fastify: FastifyInstance) {
     const pagination = parsePagination(query);
     const validSortBy = validateSortField(pagination.sortBy, AGENT_SORT_FIELDS);
 
+    // Build cache key from query parameters
+    const cache = getCacheService();
+    const cacheParams = JSON.stringify({
+      page: pagination.page,
+      limit: pagination.limit,
+      sortBy: validSortBy,
+      sortOrder: pagination.sortOrder,
+      serverId: query.serverId,
+      status: query.status,
+      role: query.role,
+      search: query.search,
+    });
+    const cacheKey = CacheService.keys.agentList(organizationId, cacheParams);
+
+    // Try to get from cache
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      fastify.log.debug({ cacheKey }, 'Cache HIT - agents list');
+      return cached;
+    }
+
+    // Cache miss - fetch from database
+    fastify.log.debug({ cacheKey }, 'Cache MISS - agents list');
+
     // Get organization's servers
     const orgServerIds = await getOrganizationServerIds(organizationId);
 
@@ -129,7 +154,12 @@ export async function agentRoutes(fastify: FastifyInstance) {
       updatedAt: a.updatedAt,
     }));
 
-    return buildPaginatedResponse(data, total, pagination.page, pagination.limit);
+    const response = buildPaginatedResponse(data, total, pagination.page, pagination.limit);
+
+    // Cache for 5 minutes (300 seconds)
+    await cache.set(cacheKey, response, 300);
+
+    return response;
   });
 
   // Create agent
@@ -174,6 +204,10 @@ export async function agentRoutes(fastify: FastifyInstance) {
         createdById: userId,
       },
     });
+
+    // Invalidate agent list cache for this organization
+    const cache = getCacheService();
+    await cache.invalidate(CacheService.keys.agentListPattern(organizationId));
 
     return {
       id: agent.id,
@@ -277,6 +311,12 @@ export async function agentRoutes(fastify: FastifyInstance) {
       data: body,
     });
 
+    // Invalidate agent list cache for this organization
+    const cache = getCacheService();
+    await cache.invalidate(CacheService.keys.agentListPattern(organizationId));
+    await cache.delete(CacheService.keys.agentDetails(id));
+    await cache.delete(CacheService.keys.agentStats(id));
+
     return {
       id: updated.id,
       name: updated.name,
@@ -311,6 +351,12 @@ export async function agentRoutes(fastify: FastifyInstance) {
     // Delete related records first
     await prisma.agentToolPermission.deleteMany({ where: { agentId: id } });
     await prisma.agent.delete({ where: { id } });
+
+    // Invalidate agent list cache for this organization
+    const cache = getCacheService();
+    await cache.invalidate(CacheService.keys.agentListPattern(organizationId));
+    await cache.delete(CacheService.keys.agentDetails(id));
+    await cache.delete(CacheService.keys.agentStats(id));
 
     return { message: 'Agent deleted successfully' };
   });

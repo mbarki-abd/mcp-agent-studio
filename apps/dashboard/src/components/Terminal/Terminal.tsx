@@ -150,20 +150,25 @@ export function Terminal({
     // Call onReady callback
     onReady?.(xterm);
 
-    // Handle resize
-    const handleResize = () => {
-      fitAddon.fit();
+    // Debounce helper (16ms = 1 frame at 60fps)
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFit = () => {
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        fitAddon.fit();
+      }, 16);
     };
-    window.addEventListener('resize', handleResize);
 
-    // Use ResizeObserver for container resize
-    const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-    });
+    // Handle resize
+    window.addEventListener('resize', debouncedFit);
+
+    // Use ResizeObserver for container resize with debounce
+    const resizeObserver = new ResizeObserver(debouncedFit);
     resizeObserver.observe(terminalRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', debouncedFit);
       resizeObserver.disconnect();
       xterm.dispose();
     };

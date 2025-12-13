@@ -17,7 +17,9 @@ export interface ChatMessage {
 export interface ChatSession {
   id: string;
   agentId: string;
-  messages: ChatMessage[];
+  messages: ChatMessage[]; // Kept for compatibility
+  messagesById: Map<string, ChatMessage>; // O(1) lookup optimization
+  messageOrder: string[]; // Preserve insertion order
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +57,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       id: sessionId,
       agentId,
       messages: [],
+      messagesById: new Map(),
+      messageOrder: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -84,9 +88,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const session = state.sessions.get(sessionId);
       if (!session) return state;
 
+      // Update both Map (for O(1) lookup) and array (for compatibility)
+      const newMessagesById = new Map(session.messagesById);
+      newMessagesById.set(newMessage.id, newMessage);
+
+      const newMessageOrder = [...session.messageOrder, newMessage.id];
+
       const updatedSession: ChatSession = {
         ...session,
         messages: [...session.messages, newMessage],
+        messagesById: newMessagesById,
+        messageOrder: newMessageOrder,
         updatedAt: new Date(),
       };
 
@@ -101,13 +113,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const session = state.sessions.get(sessionId);
       if (!session) return state;
 
+      // O(1) lookup using Map
+      const existingMessage = session.messagesById.get(messageId);
+      if (!existingMessage) return state;
+
+      const updatedMessage = { ...existingMessage, ...updates };
+
+      // Update Map
+      const newMessagesById = new Map(session.messagesById);
+      newMessagesById.set(messageId, updatedMessage);
+
+      // Update array for compatibility
       const updatedMessages = session.messages.map((msg) =>
-        msg.id === messageId ? { ...msg, ...updates } : msg
+        msg.id === messageId ? updatedMessage : msg
       );
 
       const updatedSession: ChatSession = {
         ...session,
         messages: updatedMessages,
+        messagesById: newMessagesById,
         updatedAt: new Date(),
       };
 
@@ -122,13 +146,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const session = state.sessions.get(sessionId);
       if (!session) return state;
 
+      // O(1) lookup using Map
+      const existingMessage = session.messagesById.get(messageId);
+      if (!existingMessage) return state;
+
+      const updatedMessage = {
+        ...existingMessage,
+        content: existingMessage.content + content
+      };
+
+      // Update Map
+      const newMessagesById = new Map(session.messagesById);
+      newMessagesById.set(messageId, updatedMessage);
+
+      // Update array for compatibility
       const updatedMessages = session.messages.map((msg) =>
-        msg.id === messageId ? { ...msg, content: msg.content + content } : msg
+        msg.id === messageId ? updatedMessage : msg
       );
 
       const updatedSession: ChatSession = {
         ...session,
         messages: updatedMessages,
+        messagesById: newMessagesById,
         updatedAt: new Date(),
       };
 
@@ -148,6 +187,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const updatedSession: ChatSession = {
         ...session,
         messages: [],
+        messagesById: new Map(),
+        messageOrder: [],
         updatedAt: new Date(),
       };
 
