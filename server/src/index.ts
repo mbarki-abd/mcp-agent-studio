@@ -439,5 +439,9 @@ signals.forEach((signal) => {
   });
 });
 
-// Run
-start();
+// Run only when executed directly (not during tests)
+// Check if this module is the main entry point
+const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+if (isMainModule) {
+  start();
+}
