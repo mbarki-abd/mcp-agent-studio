@@ -73,7 +73,10 @@ describe('Authentication Routes', () => {
     fastify.decorate('jwt', {
       sign: vi.fn().mockReturnValue('mock-token'),
       verify: vi.fn().mockReturnValue({ userId: 'user-123', type: 'refresh' }),
-    });
+      options: {},
+      decode: vi.fn(),
+      lookupToken: vi.fn(),
+    } as any);
 
     // Register authenticate decorator mock
     fastify.decorate('authenticate', async () => {});
@@ -378,7 +381,11 @@ describe('Registration Routes', () => {
 
     fastify.decorate('jwt', {
       sign: vi.fn().mockReturnValue('mock-token'),
-    });
+      verify: vi.fn(),
+      options: {},
+      decode: vi.fn(),
+      lookupToken: vi.fn(),
+    } as any);
 
     // Import and register routes
     const { registrationRoutes } = await import('../routes/auth/registration.routes.js');

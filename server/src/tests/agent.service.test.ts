@@ -419,16 +419,16 @@ describe('AgentService', () => {
         id: 'agent-123',
         name: 'agent-1',
         displayName: 'Agent 1',
-        status: 'PAUSED',
+        status: 'INACTIVE',
       } as any);
 
       // Act
-      await service.update('agent-123', 'user-123', { status: 'PAUSED' });
+      await service.update('agent-123', 'user-123', { status: 'INACTIVE' });
 
       // Assert
       expect(prisma.agent.update).toHaveBeenCalledWith({
         where: { id: 'agent-123' },
-        data: { status: 'PAUSED' },
+        data: { status: 'INACTIVE' },
       });
     });
   });
