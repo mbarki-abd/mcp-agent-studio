@@ -177,3 +177,164 @@ jobs:
           npm start &
           sleep 3
           node test-client.js
+
+  test-e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [build]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mcp_studio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mcp_studio_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test-jwt-secret-for-ci-e2e-tests
+      ENCRYPTION_KEY: test-encryption-key-32chars!
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+        working-directory: server
+
+      - name: Push database schema
+        run: npx prisma db push --skip-generate
+        working-directory: server
+
+      - name: Seed test data
+        run: |
+          cat > seed-e2e.mjs << 'EOF'
+          import { PrismaClient } from '@prisma/client';
+          import bcrypt from 'bcryptjs';
+
+          const prisma = new PrismaClient();
+
+          async function seed() {
+            const passwordHash = await bcrypt.hash('Admin123!', 10);
+
+            // Create test organization
+            const org = await prisma.organization.upsert({
+              where: { slug: 'test-org' },
+              update: {},
+              create: {
+                name: 'Test Organization',
+                slug: 'test-org',
+                plan: 'PRO'
+              }
+            });
+
+            // Create admin user
+            await prisma.user.upsert({
+              where: { email: 'admin@example.com' },
+              update: {},
+              create: {
+                email: 'admin@example.com',
+                name: 'Admin User',
+                passwordHash,
+                role: 'ADMIN',
+                organizationId: org.id,
+                emailVerified: true
+              }
+            });
+
+            // Create regular user
+            await prisma.user.upsert({
+              where: { email: 'test@example.com' },
+              update: {},
+              create: {
+                email: 'test@example.com',
+                name: 'Test User',
+                passwordHash,
+                role: 'OPERATOR',
+                organizationId: org.id,
+                emailVerified: true
+              }
+            });
+
+            console.log('Test data seeded successfully');
+          }
+
+          seed().catch(console.error).finally(() => prisma.$disconnect());
+          EOF
+          node seed-e2e.mjs
+        working-directory: server
+
+      - name: Build Dashboard
+        run: pnpm turbo run build --filter=dashboard
+        env:
+          VITE_API_URL: http://localhost:3000
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/dashboard
+
+      - name: Start Server
+        run: |
+          pnpm turbo run build --filter=server
+          cd server && node dist/index.js &
+          sleep 5
+        env:
+          PORT: 3000
+
+      - name: Start Dashboard Preview
+        run: |
+          cd apps/dashboard && npx vite preview --port 5173 &
+          sleep 3
+
+      - name: Run E2E Tests
+        run: npx playwright test --project=chromium --reporter=list
+        working-directory: apps/dashboard
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:5173
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/dashboard/playwright-report/
+          retention-days: 7
+
+      - name: Upload Screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: apps/dashboard/e2e/screenshots/
+          retention-days: 7
