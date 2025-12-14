@@ -6,7 +6,7 @@ version: '3.8'
 services:
   # Traefik Reverse Proxy
   traefik:
-    image: traefik:v3.2
+    image: traefik:latest
     container_name: mcp-traefik
     restart: unless-stopped
     ports:
@@ -75,6 +75,7 @@ services:
     image: mcp-server:latest
     container_name: mcp-server
     restart: unless-stopped
+    command: ["sh", "-c", "node dist/index.js"]
     environment:
       NODE_ENV: production
       PORT: 3000
