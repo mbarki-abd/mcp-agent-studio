@@ -88,6 +88,11 @@ services:
       CORS_ORIGIN: https://mcp.ilinqsoft.com
       API_URL: https://api.mcp.ilinqsoft.com
       LOG_LEVEL: info
+      # Rate limiting configuration for E2E testing
+      RATE_LIMIT_AUTH_MAX: 500
+      RATE_LIMIT_AUTH_WINDOW_MS: 60000
+      RATE_LIMIT_STANDARD_MAX: 1000
+      RATE_LIMIT_WRITE_MAX: 500
       COOKIE_SECRET: ${COOKIE_SECRET}
       AUDIT_INTEGRITY_SECRET: ${AUDIT_INTEGRITY_SECRET}
     depends_on:
