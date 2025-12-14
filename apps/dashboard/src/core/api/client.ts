@@ -65,14 +65,34 @@ class ApiClient {
   }
 
   private async parseResponse<T>(response: Response): Promise<T> {
-    const data = await response.json();
+    let data: Record<string, unknown>;
+
+    try {
+      data = await response.json();
+    } catch {
+      // Response is not valid JSON
+      if (!response.ok) {
+        throw new ApiError(
+          `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          null
+        );
+      }
+      throw new ApiError('Invalid JSON response from server', response.status, null);
+    }
 
     if (!response.ok) {
-      throw new ApiError(
-        data.error || data.message || 'An error occurred',
-        response.status,
-        data
-      );
+      // Extract error message, handling various server response formats
+      let errorMessage = 'An error occurred';
+      if (typeof data.error === 'string') {
+        errorMessage = data.error;
+      } else if (typeof data.message === 'string') {
+        errorMessage = data.message;
+      } else if (data.error && typeof data.error === 'object' && 'message' in data.error) {
+        errorMessage = String((data.error as { message: unknown }).message);
+      }
+
+      throw new ApiError(errorMessage, response.status, data);
     }
 
     return data as T;

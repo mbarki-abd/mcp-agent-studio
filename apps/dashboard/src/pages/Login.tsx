@@ -26,8 +26,17 @@ export function LoginPage() {
       } else {
         await register(email, password, name);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err: unknown) {
+      // Handle different error types
+      if (err instanceof Error) {
+        setError(err.message);
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        setError(String((err as { message: unknown }).message));
+      } else if (typeof err === 'string') {
+        setError(err);
+      } else {
+        setError('An error occurred during authentication');
+      }
     } finally {
       setIsSubmitting(false);
     }
