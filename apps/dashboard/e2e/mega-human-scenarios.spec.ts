@@ -41,19 +41,22 @@ async function initTokens(page: Page): Promise<void> {
   tokensInitialized = true;
 }
 
-// Legacy function for backward compatibility - now just returns cached token
+// Login function that always fetches a new token (for isolated tests)
 async function loginOnce(page: Page, user: typeof ADMIN_USER, isAdmin = true): Promise<string> {
-  // Always try to use cached tokens first
+  // Always try to use cached tokens first (within same worker)
   if (isAdmin && adminToken) return adminToken;
   if (!isAdmin && testUserToken) return testUserToken;
 
-  // If not initialized, try to initialize
-  if (!tokensInitialized) {
-    await initTokens(page);
-  }
+  // Perform login
+  const response = await page.request.post(`${API_URL}/api/auth/login`, { data: user });
+  const data = await response.json();
+  if (!response.ok()) throw new Error(`Login failed: ${JSON.stringify(data)}`);
 
-  const token = isAdmin ? adminToken : testUserToken;
-  if (!token) throw new Error('Failed to get token');
+  const token = data.accessToken;
+  if (isAdmin) adminToken = token;
+  else testUserToken = token;
+  tokensInitialized = true;
+
   return token;
 }
 
