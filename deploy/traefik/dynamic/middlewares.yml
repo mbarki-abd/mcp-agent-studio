@@ -1,11 +1,11 @@
 # Traefik Dynamic Configuration - Middlewares
 http:
   middlewares:
-    # API Rate Limiting
+    # API Rate Limiting (high limits for E2E testing)
     api-ratelimit:
       rateLimit:
-        average: 100
-        burst: 50
+        average: 1000
+        burst: 500
         period: 1m
 
     # Security Headers for API
@@ -18,7 +18,7 @@ http:
           - "DELETE"
           - "OPTIONS"
         accessControlAllowOriginList:
-          - "https://mcp-studio.ilinqsoft.com"
+          - "https://mcp.ilinqsoft.com"
         accessControlAllowHeaders:
           - "Authorization"
           - "Content-Type"
