@@ -6,12 +6,14 @@ version: '3.8'
 services:
   # Traefik Reverse Proxy
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.2
     container_name: mcp-traefik
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      DOCKER_API_VERSION: "1.44"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
@@ -22,7 +24,7 @@ services:
     labels:
       - "traefik.enable=true"
       # Dashboard (protected)
-      - "traefik.http.routers.traefik.rule=Host(`traefik.mcp.ilinqsoft.com`)"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.mcp-studio.ilinqsoft.com`)"
       - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik.service=api@internal"
@@ -82,8 +84,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      CORS_ORIGIN: https://mcp.ilinqsoft.com
-      API_URL: https://api.mcp.ilinqsoft.com
+      CORS_ORIGIN: https://mcp-studio.ilinqsoft.com
+      API_URL: https://api.mcp-studio.ilinqsoft.com
       LOG_LEVEL: info
       COOKIE_SECRET: ${COOKIE_SECRET}
       AUDIT_INTEGRITY_SECRET: ${AUDIT_INTEGRITY_SECRET}
@@ -96,7 +98,7 @@ services:
       - mcp-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.mcp.ilinqsoft.com`)"
+      - "traefik.http.routers.api.rule=Host(`api.mcp-studio.ilinqsoft.com`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.routers.api.middlewares=api-ratelimit@file,api-headers@file"
@@ -108,7 +110,7 @@ services:
       context: ..
       dockerfile: Dockerfile.dashboard
       args:
-        VITE_API_URL: https://api.mcp.ilinqsoft.com
+        VITE_API_URL: https://api.mcp-studio.ilinqsoft.com
     image: mcp-dashboard:latest
     container_name: mcp-dashboard
     restart: unless-stopped
@@ -116,7 +118,7 @@ services:
       - mcp-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`mcp.ilinqsoft.com`)"
+      - "traefik.http.routers.dashboard.rule=Host(`mcp-studio.ilinqsoft.com`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dashboard.middlewares=dashboard-headers@file"
