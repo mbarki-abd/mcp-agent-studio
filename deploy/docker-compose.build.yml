@@ -22,7 +22,7 @@ services:
     labels:
       - "traefik.enable=true"
       # Dashboard (protected)
-      - "traefik.http.routers.traefik.rule=Host(`traefik.mcp-studio.ilinqsoft.com`)"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.mcp.ilinqsoft.com`)"
       - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik.service=api@internal"
@@ -82,10 +82,11 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      CORS_ORIGIN: https://mcp-studio.ilinqsoft.com
-      API_URL: https://api.mcp-studio.ilinqsoft.com
+      CORS_ORIGIN: https://mcp.ilinqsoft.com
+      API_URL: https://api.mcp.ilinqsoft.com
       LOG_LEVEL: info
       COOKIE_SECRET: ${COOKIE_SECRET}
+      AUDIT_INTEGRITY_SECRET: ${AUDIT_INTEGRITY_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,16 +96,11 @@ services:
       - mcp-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.mcp-studio.ilinqsoft.com`)"
+      - "traefik.http.routers.api.rule=Host(`api.mcp.ilinqsoft.com`)"
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.api.middlewares=api-ratelimit,api-headers"
+      - "traefik.http.routers.api.middlewares=api-ratelimit@file,api-headers@file"
       - "traefik.http.services.api.loadbalancer.server.port=3000"
-      # WebSocket support
-      - "traefik.http.routers.api-ws.rule=Host(`api.mcp-studio.ilinqsoft.com`) && PathPrefix(`/api/monitoring`)"
-      - "traefik.http.routers.api-ws.entrypoints=websecure"
-      - "traefik.http.routers.api-ws.tls.certresolver=letsencrypt"
-      - "traefik.http.services.api-ws.loadbalancer.server.port=3000"
 
   # Frontend Dashboard
   dashboard:
@@ -112,7 +108,7 @@ services:
       context: ..
       dockerfile: Dockerfile.dashboard
       args:
-        VITE_API_URL: https://api.mcp-studio.ilinqsoft.com
+        VITE_API_URL: https://api.mcp.ilinqsoft.com
     image: mcp-dashboard:latest
     container_name: mcp-dashboard
     restart: unless-stopped
@@ -120,10 +116,10 @@ services:
       - mcp-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`mcp-studio.ilinqsoft.com`)"
+      - "traefik.http.routers.dashboard.rule=Host(`mcp.ilinqsoft.com`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-headers"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-headers@file"
       - "traefik.http.services.dashboard.loadbalancer.server.port=80"
 
   # Database Backup (runs daily)
