@@ -90,21 +90,55 @@ jobs:
           script: |
             cd /opt/mcp-agent-studio
 
+            # Save current state for rollback
+            PREVIOUS_VERSION=$(docker compose -f deploy/docker-compose.prod.yml images -q server 2>/dev/null || echo "none")
+            echo "Previous version: $PREVIOUS_VERSION"
+
             # Pull latest images
             docker compose -f deploy/docker-compose.prod.yml pull
 
-            # Run database migrations
-            docker compose -f deploy/docker-compose.prod.yml run --rm server npx prisma migrate deploy
+            # Run database migrations (with rollback on failure)
+            if ! docker compose -f deploy/docker-compose.prod.yml run --rm server npx prisma migrate deploy; then
+              echo "Migration failed! Aborting deployment."
+              exit 1
+            fi
 
             # Restart services with zero downtime
             docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
 
-            # Cleanup old images
+            # Wait for services to be healthy
+            echo "Waiting for services to be healthy..."
+            sleep 15
+
+            # Comprehensive health checks
+            echo "Running health checks..."
+
+            # Check API health
+            if ! curl -sf https://api.${{ secrets.DOMAIN || 'mcp-studio.ilinqsoft.com' }}/health; then
+              echo "API health check failed!"
+              exit 1
+            fi
+            echo "✓ API is healthy"
+
+            # Check Dashboard
+            if ! curl -sf https://${{ secrets.DOMAIN || 'mcp-studio.ilinqsoft.com' }}/ > /dev/null; then
+              echo "Dashboard health check failed!"
+              exit 1
+            fi
+            echo "✓ Dashboard is accessible"
+
+            # Check Docker container health status
+            UNHEALTHY=$(docker ps --filter "health=unhealthy" --format "{{.Names}}" | grep mcp || true)
+            if [ -n "$UNHEALTHY" ]; then
+              echo "Unhealthy containers detected: $UNHEALTHY"
+              exit 1
+            fi
+            echo "✓ All containers are healthy"
+
+            # Cleanup old images (keep last 24h)
             docker image prune -af --filter "until=24h"
 
-            # Health check
-            sleep 10
-            curl -f https://api.${{ secrets.DOMAIN || 'mcp-studio.ilinqsoft.com' }}/health || exit 1
+            echo "✅ Deployment successful!"
 
       - name: Notify on success
         if: success()

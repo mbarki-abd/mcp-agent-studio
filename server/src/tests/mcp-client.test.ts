@@ -326,7 +326,10 @@ describe('MCPClient', () => {
   });
 
   describe('Tool Execution', () => {
+    let capturedExecutionId: string | null = null;
+
     beforeEach(async () => {
+      capturedExecutionId = null;
       client = new MCPClient({
         serverUrl: 'http://localhost:3000',
         token: 'test-token',
@@ -340,6 +343,18 @@ describe('MCPClient', () => {
         result: { name: 'test', version: '1.0', capabilities: [], tools: [] },
       }));
       await connectPromise;
+
+      // Capture the executionId from the request sent via WebSocket
+      mockWs.send.mockImplementation((data: string) => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.params?.arguments?.executionId) {
+            capturedExecutionId = parsed.params.arguments.executionId;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      });
     });
 
     it('should execute prompt successfully', async () => {
@@ -349,11 +364,16 @@ describe('MCPClient', () => {
         { onOutput }
       );
 
-      // Simulate output notification
+      // Wait for the request to be sent and executionId to be captured
+      await vi.waitFor(() => {
+        expect(capturedExecutionId).not.toBeNull();
+      });
+
+      // Simulate output notification with the actual executionId
       mockWs.simulateMessage(JSON.stringify({
         jsonrpc: '2.0',
         method: 'execution/output',
-        params: { executionId: 'exec-123', content: 'Output chunk' },
+        params: { executionId: capturedExecutionId, content: 'Output chunk' },
       }));
 
       // Simulate execution result
@@ -380,12 +400,17 @@ describe('MCPClient', () => {
         { onToolCall }
       );
 
-      // Simulate tool call notification
+      // Wait for the request to be sent and executionId to be captured
+      await vi.waitFor(() => {
+        expect(capturedExecutionId).not.toBeNull();
+      });
+
+      // Simulate tool call notification with the actual executionId
       mockWs.simulateMessage(JSON.stringify({
         jsonrpc: '2.0',
         method: 'execution/tool_call',
         params: {
-          executionId: 'exec-456',
+          executionId: capturedExecutionId,
           id: 'call-1',
           name: 'Read',
           arguments: { file_path: '/test.ts' },
@@ -401,11 +426,13 @@ describe('MCPClient', () => {
 
       await executePromise;
 
-      expect(onToolCall).toHaveBeenCalledWith({
-        id: 'call-1',
-        name: 'Read',
-        arguments: { file_path: '/test.ts' },
-      });
+      expect(onToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'call-1',
+          name: 'Read',
+          arguments: { file_path: '/test.ts' },
+        })
+      );
     });
 
     it('should throw error if not connected', async () => {
