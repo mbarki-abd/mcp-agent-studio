@@ -1,0 +1,90 @@
+%%{init: {'theme': 'dark'}}%%
+%% GODMODE - VUE GALACTIQUE (L1)
+%% ~200 tokens - Modules et relations
+%% Auto-genere par Conscience Collective
+
+graph TB
+    subgraph Core["⚙️ CORE SYSTEM"]
+        GM["🧠 Grand Maitre"]
+        DAEMON["🔄 Daemon<br/>PERCEIVE→THINK→DECIDE→ACT→REFLECT"]
+        IMPERIUM["⚔️ Imperium<br/>!!/!/>/~/#"]
+        KARMA["⭐ Karma<br/>-1000 → +1000"]
+        ROOT["🔐 Root Access"]
+    end
+
+    subgraph Conscience["🧘 CONSCIENCE"]
+        PERCEPT["👁️ Perception<br/>L1: Awareness"]
+        INTRO["🔍 Introspection<br/>L2: Self-Analysis"]
+        META["🎭 Meta-Cognitif<br/>L3: Self-Awareness"]
+        COLLECT["🌐 Collective<br/>Vector Store + Sync"]
+    end
+
+    subgraph AgentSystem["👥 AGENT SYSTEM"]
+        direction TB
+        CATALOG["📚 Catalogue"]
+        RECRUIT["🎯 Recrutement"]
+
+        subgraph Tiers["Hierarchie"]
+            T1["🏛️ Tier 1<br/>STRAT-ARCH<br/>LEAD-*"]
+            T2["👔 Tier 2<br/>DEV-BACK-*<br/>DEV-FRONT-*"]
+            T3["👷 Tier 3<br/>Executants<br/>Specialises"]
+        end
+    end
+
+    subgraph Storage["💾 STORAGE"]
+        VECTORS[("📊 Vectors<br/>FAISS Index")]
+        CHUNKS[("📦 Chunks<br/>Semantic Split")]
+        MEMORY[("🧠 Memory<br/>State + History")]
+        MSGS[("📨 Messages<br/>A2A Protocol")]
+    end
+
+    subgraph Visual["👁️ VISUAL"]
+        HOLO["🌟 Hologram<br/>Nexus+Forme+Energie+Aura"]
+        OMNI["📡 Omniscient<br/>Real-time Dashboard"]
+        ORACLE["🔮 Oracle<br/>Success Controller"]
+        SENTINEL["🛡️ Sentinel<br/>Error Controller"]
+    end
+
+    subgraph Compression["📐 COMPRESSION"]
+        ARCH["📝 ARCH.spec<br/>240x compression"]
+        JSONLD["🔗 JSON-LD<br/>100x compression"]
+        MERMAID["📊 Mermaid<br/>150x compression"]
+        ZOOM["🔭 Zoom<br/>L0→L4 Semantic"]
+    end
+
+    %% Relations Core
+    GM --> DAEMON
+    GM --> IMPERIUM
+    DAEMON --> KARMA
+    GM --> ROOT
+
+    %% Relations Conscience
+    GM --> Conscience
+    PERCEPT --> INTRO --> META
+    META --> COLLECT
+    COLLECT --> VECTORS
+    COLLECT -.->|broadcast| AgentSystem
+
+    %% Relations Agents
+    GM --> AgentSystem
+    CATALOG --> RECRUIT
+    RECRUIT --> Tiers
+    T1 --> T2 --> T3
+
+    %% Relations Storage
+    AgentSystem --> Storage
+    COLLECT --> CHUNKS
+
+    %% Relations Visual
+    Storage --> Visual
+    Conscience --> HOLO
+
+    %% Relations Compression
+    COLLECT --> Compression
+    Compression --> VECTORS
+
+    %% Styles
+    style GM fill:#7B68EE,stroke:#FFD700,stroke-width:3px
+    style COLLECT fill:#00FF88,stroke:#fff,stroke-width:2px
+    style VECTORS fill:#00BFFF,stroke:#fff
+    style HOLO fill:#FF69B4,stroke:#fff

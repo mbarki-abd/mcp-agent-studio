@@ -327,6 +327,10 @@ async function registerRoutes() {
   // Analytics routes
   const { analyticsRoutes } = await import('./routes/analytics.routes.js');
   await fastify.register(analyticsRoutes, { prefix: '/api/analytics' });
+
+  // System configuration routes (admin only)
+  const { systemRoutes } = await import('./routes/system.routes.js');
+  await fastify.register(systemRoutes, { prefix: '/api/system' });
 }
 
 // Start server

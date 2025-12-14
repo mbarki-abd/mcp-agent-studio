@@ -1,0 +1,145 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Module",
+  "@id": "mod:auth",
+  "name": "auth",
+  "depends": [
+    "mod:db",
+    "mod:jwt",
+    "mod:crypto",
+    "mod:mailer"
+  ],
+  "exports": [
+    "fn:login",
+    "fn:register",
+    "fn:verify",
+    "fn:refresh",
+    "fn:logout",
+    "fn:resetPassword",
+    "fn:enable2FA"
+  ],
+  "entities": [
+    {
+      "@type": "Entity",
+      "@id": "ent:User",
+      "name": "User",
+      "schema": {
+        "id": "uuid",
+        "email": "string",
+        "hash": "string",
+        "role": "enum",
+        "verified": "bool",
+        "mfa": "bool"
+      }
+    },
+    {
+      "@type": "Entity",
+      "@id": "ent:Token",
+      "name": "Token",
+      "schema": {
+        "jwt": "string",
+        "exp": "timestamp",
+        "type": "enum"
+      }
+    },
+    {
+      "@type": "Entity",
+      "@id": "ent:Session",
+      "name": "Session",
+      "schema": {
+        "id": "uuid",
+        "userId": "uuid",
+        "ip": "string",
+        "agent": "string",
+        "created": "timestamp"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "@type": "Function",
+      "@id": "fn:login",
+      "name": "login",
+      "input": {
+        "email": "string",
+        "pass": "string"
+      },
+      "output": "Token",
+      "errors": [
+        "AuthError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:register",
+      "name": "register",
+      "input": {
+        "data": "UserData"
+      },
+      "output": "User",
+      "errors": [
+        "ValidationError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:verify",
+      "name": "verify",
+      "input": {
+        "token": "JWT"
+      },
+      "output": "User",
+      "errors": [
+        "TokenError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:refresh",
+      "name": "refresh",
+      "input": {
+        "refreshToken": "JWT"
+      },
+      "output": "Token",
+      "errors": [
+        "TokenError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:logout",
+      "name": "logout",
+      "input": {
+        "token": "JWT"
+      },
+      "output": "void",
+      "errors": [
+        "TokenError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:resetPassword",
+      "name": "resetPassword",
+      "input": {
+        "email": "string"
+      },
+      "output": "void",
+      "errors": [
+        "UserError"
+      ]
+    },
+    {
+      "@type": "Function",
+      "@id": "fn:enable2FA",
+      "name": "enable2FA",
+      "input": {
+        "userId": "uuid"
+      },
+      "output": "QRCode",
+      "errors": [
+        "AuthError"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161760-bd1d5d9a",
+  "from": "AGT-DEV-BACK-002",
+  "to": "GRAND-MAITRE",
+  "timestamp": "2025-12-13T01:26:01.760Z",
+  "intent": "ERROR_REPORT",
+  "priority": "HIGH",
+  "payload": {
+    "severity": "WARNING",
+    "component": "message-system",
+    "error": {
+      "type": "ValidationError",
+      "message": "Invalid agent ID format",
+      "stack": "at createMessage (message-system.js:123)",
+      "context": {
+        "agentId": "invalid-id",
+        "expectedFormat": "AGT-XXX-NNN"
+      }
+    },
+    "impact": "Message rejected, no data loss",
+    "suggestedAction": "Update agent ID validation rules"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": null,
+  "status": "read",
+  "readAt": "2025-12-13T01:26:01.774Z"
+}

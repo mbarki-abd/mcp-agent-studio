@@ -1,0 +1,50 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161764-c025f2a9",
+  "from": "AGT-LEAD-BACK-001",
+  "to": "TEAM-BACKEND",
+  "timestamp": "2025-12-13T01:26:01.764Z",
+  "intent": "SYNC_DELTA",
+  "priority": "NORMAL",
+  "payload": {
+    "module": "auth",
+    "changes": {
+      "added": [
+        {
+          "@type": "Function",
+          "@id": "fn:logout",
+          "description": "Invalide le token JWT"
+        }
+      ],
+      "modified": [
+        {
+          "@id": "fn:login",
+          "changes": {
+            "constraints": [
+              {
+                "type": "rateLimit",
+                "max": 3,
+                "window": "5m"
+              }
+            ]
+          }
+        }
+      ],
+      "removed": []
+    },
+    "timestamp": "2025-12-13T01:26:01.763Z"
+  },
+  "delta": {
+    "added": [
+      "fn:logout"
+    ],
+    "modified": [
+      "fn:login"
+    ],
+    "removed": []
+  },
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

@@ -1,0 +1,47 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "HologramState",
+  "version": "1.0",
+  "timestamp": "2025-12-13T00:00:00Z",
+
+  "state": "ACTIF",
+
+  "nexus": {
+    "color": "#00FF88",
+    "pulsation_speed": "1s",
+    "luminosity": 80,
+    "effect": "pulse"
+  },
+
+  "forme": {
+    "geometry": "polyhedron",
+    "faces": 0,
+    "edges": 0,
+    "rotation_speed": 0.5,
+    "scale": 1.0
+  },
+
+  "energie": {
+    "particle_count": 500,
+    "flow_density": 50,
+    "message_rate": 0,
+    "trails_enabled": true
+  },
+
+  "aura": {
+    "color": "#87CEEB",
+    "radius": 1.5,
+    "transparency": 70,
+    "effect": "stable",
+    "emotion": "serenite"
+  },
+
+  "theme": "default",
+
+  "interactions": {
+    "hover_enabled": true,
+    "click_enabled": true,
+    "drag_enabled": true,
+    "zoom_enabled": true
+  }
+}

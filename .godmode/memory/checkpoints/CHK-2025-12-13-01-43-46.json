@@ -1,0 +1,261 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Checkpoint",
+  "id": "CHK-2025-12-13-01-43-46",
+  "name": "Auto-save stopped",
+  "type": "SESSION",
+  "timestamp": "2025-12-13T01:43:46.334Z",
+  "files": [
+    {
+      "path": "project-state.json",
+      "hash": "b70ddf6437c31418cd027c76116ab2a77621377c80295899c33b00ddc201a629",
+      "content": {
+        "version": "3.0",
+        "project": {
+          "id": "PRJ-GODMODE-MASTER",
+          "name": "GODMODE System",
+          "description": "Système Multi-Agent Autonome pour le développement de projets complexes",
+          "type": "FRAMEWORK",
+          "complexity": "OMEGA",
+          "workflow": "WF-FRAMEWORK",
+          "created_at": "2024-12-12T00:00:00Z",
+          "updated_at": "2024-12-12T00:00:00Z",
+          "created_by": "CONSEIL-DIVIN"
+        },
+        "status": {
+          "phase": "P2-CORE",
+          "sub_phase": "AGENT_TEMPLATES",
+          "progress_percentage": 55,
+          "health": "GREEN",
+          "daemon_state": "ACTIVE"
+        },
+        "workflow": {
+          "id": "WF-FRAMEWORK",
+          "current_phase_index": 1,
+          "phases": [
+            {
+              "id": "P0-GENESIS",
+              "name": "Genesis",
+              "status": "COMPLETED",
+              "progress": 100
+            },
+            {
+              "id": "P1-FOUNDATION",
+              "name": "Foundation",
+              "status": "IN_PROGRESS",
+              "progress": 75
+            },
+            {
+              "id": "P2-AGENTS",
+              "name": "Agent System",
+              "status": "PENDING",
+              "progress": 0
+            },
+            {
+              "id": "P3-INTEGRATION",
+              "name": "Integration",
+              "status": "PENDING",
+              "progress": 0
+            },
+            {
+              "id": "P4-TESTING",
+              "name": "Testing",
+              "status": "PENDING",
+              "progress": 0
+            },
+            {
+              "id": "P5-DEPLOYMENT",
+              "name": "Deployment",
+              "status": "PENDING",
+              "progress": 0
+            }
+          ]
+        },
+        "agents": {
+          "active_count": 2,
+          "total_recruited": 3,
+          "dissolved_count": 1
+        },
+        "metrics": {
+          "tasks_total": 25,
+          "tasks_completed": 25,
+          "tasks_in_progress": 0,
+          "tasks_blocked": 0,
+          "code_coverage": 85,
+          "technical_debt": "LOW",
+          "karma_average": 0
+        },
+        "daemon": {
+          "cycles_completed": 1,
+          "last_cycle": "2024-12-12T00:00:00Z",
+          "state": "ACTIVE",
+          "mode": "AUTO_INTERACTIONNEL"
+        },
+        "blockers": [],
+        "next_milestones": [
+          {
+            "name": "Core System Complete",
+            "target": "P1-FOUNDATION complete",
+            "progress": 75
+          },
+          {
+            "name": "First Agent Operational",
+            "target": "Recruit and deploy first agent",
+            "progress": 0
+          }
+        ],
+        "decisions_log": [
+          {
+            "id": "DEC-001",
+            "timestamp": "2024-12-12T00:00:00Z",
+            "type": "ARCHITECTURAL",
+            "title": "Architecture GODMODE v3 - Daemon Autonome",
+            "decided_by": "GRAND-MAITRE",
+            "approved_by": "CONSEIL-DIVIN",
+            "decision": "Implémenter un système Daemon autonome avec autorité ROOT absolue"
+          },
+          {
+            "id": "DEC-002",
+            "timestamp": "2024-12-12T00:00:00Z",
+            "type": "GOVERNANCE",
+            "title": "Système KARMA de récompenses/sanctions",
+            "decided_by": "GRAND-MAITRE",
+            "approved_by": "CONSEIL-DIVIN",
+            "decision": "Implémenter un système méritocratique avec scores Karma [-1000, +1000]"
+          }
+        ]
+      }
+    },
+    {
+      "path": "agents-registry.json",
+      "hash": "55a44796e8097750430d62941599a97f723933a7a3f31ae7a06d637df22bae76",
+      "content": {
+        "version": "3.0",
+        "last_updated": "2024-12-12T00:00:00Z",
+        "grand_maitre": {
+          "id": "GRAND-MAITRE",
+          "status": "ACTIVE",
+          "type": "DAEMON",
+          "authority": "ROOT_ABSOLUTE",
+          "karma": 1000,
+          "karma_level": "DIVINE",
+          "created_at": "2024-12-12T00:00:00Z",
+          "statistics": {
+            "decisions_made": 2,
+            "agents_recruited": 0,
+            "agents_dissolved": 0,
+            "decrees_issued": 0,
+            "orders_issued": 0,
+            "cycles_completed": 1
+          }
+        },
+        "agents": {},
+        "hierarchy": {
+          "GRAND-MAITRE": {
+            "children": []
+          }
+        },
+        "karma_leaderboard": [],
+        "hall_of_fame": [],
+        "blacklist": [],
+        "next_agent_sequence": {
+          "STRAT": 1,
+          "LEAD": 1,
+          "DEV": 1,
+          "QA": 1,
+          "DATA": 1,
+          "ML": 1,
+          "DEVOPS": 1,
+          "OTHER": 1
+        }
+      }
+    },
+    {
+      "path": "daemon-state.json",
+      "hash": "5a3293964dcfb8be239c57207f1a4b268f64e46c09fc1c05389b4e775997f0b5",
+      "content": {
+        "version": "3.0",
+        "cycles_completed": 57,
+        "last_cycle": "2025-12-13T01:41:42.472Z",
+        "state": "IDLE",
+        "current_phase": "CHECK",
+        "progress": 100,
+        "last_cycle_stats": {
+          "duration_ms": 78,
+          "grade": "A+",
+          "score": 100,
+          "actions_total": 3,
+          "actions_succeeded": 3,
+          "actions_failed": 0
+        }
+      }
+    },
+    {
+      "path": "karma-ledger.json",
+      "hash": "7b265a57d168da38b8636fabed2d8175f852b5b4118c347e57c82e1d60897890",
+      "content": {
+        "version": "1.0",
+        "last_updated": "2024-12-12T00:00:00Z",
+        "global_stats": {
+          "total_rewards_issued": 0,
+          "total_sanctions_issued": 0,
+          "total_karma_distributed": 0,
+          "total_credits_distributed": 0,
+          "agents_in_hall_of_fame": 0,
+          "agents_in_blacklist": 0,
+          "tribunals_held": 0,
+          "dissolutions_for_karma": 0
+        },
+        "karma_history": [],
+        "rewards_log": [],
+        "sanctions_log": [],
+        "tribunal_records": [],
+        "credit_transactions": [],
+        "privilege_purchases": [],
+        "karma_milestones": [
+          {
+            "karma": 100,
+            "title": "Newcomer",
+            "badge": "🌱"
+          },
+          {
+            "karma": 200,
+            "title": "Contributor",
+            "badge": "✅"
+          },
+          {
+            "karma": 400,
+            "title": "Achiever",
+            "badge": "🌟"
+          },
+          {
+            "karma": 600,
+            "title": "Elite",
+            "badge": "⭐"
+          },
+          {
+            "karma": 800,
+            "title": "Legend",
+            "badge": "🏆"
+          },
+          {
+            "karma": 1000,
+            "title": "Mythic",
+            "badge": "👑"
+          }
+        ],
+        "daily_karma_cap": {
+          "max_positive_per_day": 200,
+          "max_negative_per_day": -300
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "phase": "P2-CORE",
+    "sub_phase": "AGENT_TEMPLATES",
+    "agents": 2,
+    "tasks_completed": 25,
+    "progress": 55
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589551437-4db56d13",
+  "from": "SYSTEM-KARMA",
+  "to": "AGT-DEV-BACK-003",
+  "timestamp": "2025-12-13T01:32:31.438Z",
+  "intent": "KARMA_UPDATE",
+  "priority": "LOW",
+  "payload": {
+    "agentId": "AGT-DEV-BACK-003",
+    "previousKarma": 400,
+    "newKarma": 600,
+    "change": 200,
+    "reason": "TASK-050 completed with high quality",
+    "breakdown": {
+      "taskCompletion": 100,
+      "codeQuality": 40,
+      "testCoverage": 35,
+      "documentation": 25
+    }
+  },
+  "delta": null,
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

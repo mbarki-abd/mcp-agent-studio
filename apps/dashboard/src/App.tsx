@@ -16,6 +16,7 @@ const VerifyEmailPage = lazy(() => import('./pages/VerifyEmail').then(m => ({ de
 // Lazy load main pages
 const SettingsPage = lazy(() => import('./pages/Settings').then(m => ({ default: m.SettingsPage })));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const SystemConfig = lazy(() => import('./pages/SystemConfig'));
 
 // Import modules
 import { serversModule } from './modules/servers';
@@ -114,6 +115,7 @@ function AppContent() {
         <ModuleLoader>
           <Route path="/" element={<Dashboard />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/system" element={<SystemConfig />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </ModuleLoader>
       </DashboardLayout>

@@ -1,0 +1,23 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161751-a14f8570",
+  "from": "AGT-FRONT-001",
+  "to": "AGT-DEV-BACK-002",
+  "timestamp": "2025-12-13T01:26:01.752Z",
+  "intent": "QUERY_SPEC",
+  "priority": "NORMAL",
+  "payload": {
+    "module": "auth",
+    "questions": [
+      "Quel est le format du token JWT?",
+      "Quelle est la durée de validité?",
+      "Y a-t-il un refresh token?"
+    ],
+    "context": "Intégration frontend de l'authentification"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": null,
+  "status": "unread"
+}

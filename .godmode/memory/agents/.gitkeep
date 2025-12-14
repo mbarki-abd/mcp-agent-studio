@@ -1,0 +1,36 @@
+# GODMODE - Agent Memory Storage
+
+Ce répertoire contient les contextes persistants des agents.
+
+## Structure
+
+```
+agents/
+├── AGT-DEV-BACK-001/
+│   ├── context.json      # État courant de l'agent
+│   ├── history.json      # Historique des actions
+│   └── learnings.json    # Apprentissages accumulés
+├── AGT-LEAD-BACK-001/
+│   ├── context.json
+│   ├── history.json
+│   └── learnings.json
+└── ...
+```
+
+## Fichiers
+
+### context.json
+État actuel de l'agent: statut, tâche courante, karma, métadonnées.
+
+### history.json
+Historique complet des actions effectuées par l'agent.
+
+### learnings.json
+Apprentissages, insights et expériences accumulées.
+
+## Usage
+
+Les agents sont automatiquement archivés lors de leur dissolution.
+Le contexte peut être restauré pour réactiver un agent ou transférer ses connaissances.
+
+Voir: `src/agents/persistence.js` pour les fonctions de gestion.

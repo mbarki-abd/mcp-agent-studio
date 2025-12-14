@@ -1,0 +1,34 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "PatternRepository",
+  "version": "1.0",
+  "created": "2025-12-13T00:00:00Z",
+  "patterns": [
+    {
+      "timestamp": "2025-12-13T00:00:00Z",
+      "type": "AGENT_IDLE",
+      "conditions": {
+        "idle_duration": "> 15min",
+        "has_tasks": false
+      },
+      "success_rate": 85,
+      "confidence": "HIGH",
+      "frequency": 1,
+      "last_seen": "2025-12-13T00:00:00Z",
+      "action_recommended": "DISSOLVE or ASSIGN_TASK"
+    },
+    {
+      "timestamp": "2025-12-13T00:00:00Z",
+      "type": "TASK_FAILURE",
+      "conditions": {
+        "complexity": "HIGH",
+        "agent_tier": 3
+      },
+      "success_rate": 30,
+      "confidence": "MEDIUM",
+      "frequency": 1,
+      "last_seen": "2025-12-13T00:00:00Z",
+      "action_recommended": "ASSIGN_TO_HIGHER_TIER"
+    }
+  ]
+}

@@ -3,13 +3,17 @@ import {
   Bot,
   Settings,
   LayoutDashboard,
+  Shield,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useModuleNavigation } from '../../core/modules';
+import { useAuth } from '../../core/auth';
 
 export function Sidebar() {
   const location = useLocation();
   const moduleNavItems = useModuleNavigation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -71,7 +75,22 @@ export function Sidebar() {
       </nav>
 
       {/* Settings at bottom */}
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-1">
+        {/* System Config - Admin only */}
+        {isAdmin && (
+          <Link
+            to="/system"
+            className={cn(
+              'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+              isActive('/system')
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            <Shield className="w-5 h-5" />
+            <span>System</span>
+          </Link>
+        )}
         <Link
           to="/settings"
           className={cn(

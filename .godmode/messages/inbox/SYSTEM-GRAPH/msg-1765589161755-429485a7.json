@@ -1,0 +1,64 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161755-429485a7",
+  "from": "AGT-DEV-BACK-002",
+  "to": "SYSTEM-GRAPH",
+  "timestamp": "2025-12-13T01:26:01.755Z",
+  "intent": "UPDATE_GRAPH",
+  "priority": "NORMAL",
+  "payload": {
+    "@context": "https://godmode.dev/ontology/v1",
+    "@type": "Module",
+    "@id": "mod:messages",
+    "name": "Message System",
+    "version": "1.0.0",
+    "depends": [
+      "mod:fs",
+      "mod:crypto"
+    ],
+    "functions": [
+      {
+        "@type": "Function",
+        "@id": "fn:createMessage",
+        "input": {
+          "from": "string",
+          "to": "string",
+          "intent": "Intent",
+          "payload": "object"
+        },
+        "output": "Message",
+        "constraints": [
+          {
+            "type": "validation",
+            "rule": "from and to must be agent IDs"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "@type": "Entity",
+        "@id": "ent:Message",
+        "schema": {
+          "id": "string",
+          "from": "string",
+          "to": "string",
+          "timestamp": "ISO8601",
+          "intent": "Intent",
+          "payload": "object"
+        }
+      }
+    ]
+  },
+  "delta": {
+    "added": [
+      "mod:messages"
+    ],
+    "modified": [],
+    "removed": []
+  },
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

@@ -1,0 +1,50 @@
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#7B68EE'}}}%%
+%% GODMODE - VUE COSMIQUE (L0)
+%% ~50 tokens - Tout le systeme en 1 vue
+%% Auto-genere par Conscience Collective
+
+graph TB
+    subgraph GODMODE["🔱 GODMODE SYSTEM"]
+        GM[("🧠 Grand Maitre<br/>DAEMON")]
+
+        subgraph Core["⚙️ Core"]
+            DAEMON[Daemon Cycle]
+            IMPERIUM[Commands]
+            KARMA[Karma]
+        end
+
+        subgraph Conscience["🧘 Conscience"]
+            PERCEPT[Perception]
+            INTRO[Introspection]
+            META[Meta]
+            COLLECT[Collective]
+        end
+
+        subgraph Agents["👥 Agents"]
+            T1[Tier 1<br/>Strateges]
+            T2[Tier 2<br/>Leads]
+            T3[Tier 3<br/>Executants]
+        end
+
+        subgraph Storage["💾 Storage"]
+            VECTORS[(Vectors)]
+            CHUNKS[(Chunks)]
+            MEMORY[(Memory)]
+        end
+
+        subgraph Visual["👁️ Visual"]
+            HOLO[Hologram]
+            OMNI[Omniscient]
+        end
+    end
+
+    GM --> Core
+    GM --> Conscience
+    GM --> Agents
+    Agents --> Storage
+    Storage --> Visual
+    COLLECT --> VECTORS
+    COLLECT -.->|sync| Agents
+
+    style GM fill:#7B68EE,stroke:#fff,stroke-width:3px
+    style COLLECT fill:#00FF88,stroke:#fff,stroke-width:2px

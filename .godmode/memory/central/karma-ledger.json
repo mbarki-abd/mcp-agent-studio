@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "last_updated": "2024-12-12T00:00:00Z",
+
+  "global_stats": {
+    "total_rewards_issued": 0,
+    "total_sanctions_issued": 0,
+    "total_karma_distributed": 0,
+    "total_credits_distributed": 0,
+    "agents_in_hall_of_fame": 0,
+    "agents_in_blacklist": 0,
+    "tribunals_held": 0,
+    "dissolutions_for_karma": 0
+  },
+
+  "karma_history": [],
+
+  "rewards_log": [],
+
+  "sanctions_log": [],
+
+  "tribunal_records": [],
+
+  "credit_transactions": [],
+
+  "privilege_purchases": [],
+
+  "karma_milestones": [
+    {
+      "karma": 100,
+      "title": "Newcomer",
+      "badge": "🌱"
+    },
+    {
+      "karma": 200,
+      "title": "Contributor",
+      "badge": "✅"
+    },
+    {
+      "karma": 400,
+      "title": "Achiever",
+      "badge": "🌟"
+    },
+    {
+      "karma": 600,
+      "title": "Elite",
+      "badge": "⭐"
+    },
+    {
+      "karma": 800,
+      "title": "Legend",
+      "badge": "🏆"
+    },
+    {
+      "karma": 1000,
+      "title": "Mythic",
+      "badge": "👑"
+    }
+  ],
+
+  "daily_karma_cap": {
+    "max_positive_per_day": 200,
+    "max_negative_per_day": -300
+  }
+}

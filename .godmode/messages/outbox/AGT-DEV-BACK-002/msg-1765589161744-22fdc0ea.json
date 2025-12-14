@@ -1,0 +1,27 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161744-22fdc0ea",
+  "from": "AGT-DEV-BACK-002",
+  "to": "GRAND-MAITRE",
+  "timestamp": "2025-12-13T01:26:01.745Z",
+  "intent": "TASK_PROGRESS",
+  "priority": "NORMAL",
+  "payload": {
+    "taskId": "TASK-003",
+    "progress": 50,
+    "completed": [
+      "Structure des répertoires créée",
+      "message-system.js implémenté",
+      "CLI créé"
+    ],
+    "inProgress": [
+      "Tests en cours"
+    ],
+    "blockers": []
+  },
+  "delta": null,
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

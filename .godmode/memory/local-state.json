@@ -1,0 +1,10 @@
+{
+  "projectId": "mcp-agent-studio",
+  "name": "MCP Agent Studio",
+  "initialized": true,
+  "godmodeVersion": "3.1",
+  "mode": "CLI_PURE",
+  "centralPath": "./.godmode/memory/central",
+  "lastSync": "2025-12-13T15:00:00Z",
+  "initDate": "2025-12-13T14:30:00Z"
+}

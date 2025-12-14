@@ -1,0 +1,213 @@
+name: Bundle Size Analysis
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'apps/dashboard/**'
+      - 'packages/**'
+  push:
+    branches: [main, master]
+
+jobs:
+  analyze:
+    name: Analyze Bundle Size
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for comparison
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dashboard
+        working-directory: apps/dashboard
+        run: pnpm run build
+
+      - name: Calculate bundle sizes
+        id: bundle-size
+        working-directory: apps/dashboard
+        run: |
+          # Calculate total JS size
+          TOTAL_SIZE=$(find dist/assets -name "*.js" -type f -exec du -b {} \; | awk '{sum+=$1} END {print sum}')
+          TOTAL_GZIP=$(find dist/assets -name "*.js" -type f -exec gzip -c {} \; | wc -c)
+
+          # Calculate vendor chunk sizes
+          REACT_VENDOR=$(find dist/assets -name "react-vendor*.js" -exec stat -f%z {} \; 2>/dev/null || echo "0")
+          UI_VENDOR=$(find dist/assets -name "ui-vendor*.js" -exec stat -f%z {} \; 2>/dev/null || echo "0")
+          CHART_VENDOR=$(find dist/assets -name "chart-vendor*.js" -exec stat -f%z {} \; 2>/dev/null || echo "0")
+
+          echo "total_size=$TOTAL_SIZE" >> $GITHUB_OUTPUT
+          echo "total_gzip=$TOTAL_GZIP" >> $GITHUB_OUTPUT
+          echo "react_vendor=$REACT_VENDOR" >> $GITHUB_OUTPUT
+          echo "ui_vendor=$UI_VENDOR" >> $GITHUB_OUTPUT
+          echo "chart_vendor=$CHART_VENDOR" >> $GITHUB_OUTPUT
+
+      - name: Compare with base branch (PR only)
+        if: github.event_name == 'pull_request'
+        id: compare
+        working-directory: apps/dashboard
+        run: |
+          git checkout ${{ github.event.pull_request.base.ref }}
+          pnpm run build > /dev/null 2>&1
+
+          BASE_SIZE=$(find dist/assets -name "*.js" -type f -exec du -b {} \; | awk '{sum+=$1} END {print sum}')
+          BASE_GZIP=$(find dist/assets -name "*.js" -type f -exec gzip -c {} \; | wc -c)
+
+          DIFF_SIZE=$((${TOTAL_SIZE} - ${BASE_SIZE}))
+          DIFF_GZIP=$((${TOTAL_GZIP} - ${BASE_GZIP}))
+          DIFF_PERCENT=$(awk "BEGIN {printf \"%.2f\", (${DIFF_SIZE} / ${BASE_SIZE}) * 100}")
+
+          echo "base_size=$BASE_SIZE" >> $GITHUB_OUTPUT
+          echo "base_gzip=$BASE_GZIP" >> $GITHUB_OUTPUT
+          echo "diff_size=$DIFF_SIZE" >> $GITHUB_OUTPUT
+          echo "diff_gzip=$DIFF_GZIP" >> $GITHUB_OUTPUT
+          echo "diff_percent=$DIFF_PERCENT" >> $GITHUB_OUTPUT
+
+      - name: Check bundle size threshold
+        if: github.event_name == 'pull_request'
+        run: |
+          THRESHOLD=10
+          DIFF_PERCENT=${{ steps.compare.outputs.diff_percent }}
+
+          if (( $(echo "$DIFF_PERCENT > $THRESHOLD" | bc -l) )); then
+            echo "::error::Bundle size increased by ${DIFF_PERCENT}%, exceeding threshold of ${THRESHOLD}%"
+            exit 1
+          fi
+
+      - name: Comment PR with bundle analysis
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const totalSize = ${{ steps.bundle-size.outputs.total_size }};
+            const totalGzip = ${{ steps.bundle-size.outputs.total_gzip }};
+            const baseSize = ${{ steps.compare.outputs.base_size }};
+            const baseGzip = ${{ steps.compare.outputs.base_gzip }};
+            const diffSize = ${{ steps.compare.outputs.diff_size }};
+            const diffGzip = ${{ steps.compare.outputs.diff_gzip }};
+            const diffPercent = ${{ steps.compare.outputs.diff_percent }};
+
+            const formatBytes = (bytes) => {
+              const kb = bytes / 1024;
+              return kb > 1024 ? `${(kb / 1024).toFixed(2)} MB` : `${kb.toFixed(2)} KB`;
+            };
+
+            const formatDiff = (diff) => {
+              const sign = diff > 0 ? '+' : '';
+              return `${sign}${formatBytes(diff)}`;
+            };
+
+            const emoji = diffPercent > 10 ? '⚠️' : diffPercent > 0 ? '📈' : diffPercent < -10 ? '🎉' : '✅';
+
+            const comment = `## ${emoji} Bundle Size Analysis
+
+            ### Current Bundle
+            - **Total (uncompressed):** ${formatBytes(totalSize)}
+            - **Total (gzipped):** ${formatBytes(totalGzip)}
+            - **Compression ratio:** ${(totalSize / totalGzip).toFixed(2)}x
+
+            ### Comparison with \`${context.payload.pull_request.base.ref}\`
+            | Metric | Base | Current | Diff | % |
+            |--------|------|---------|------|---|
+            | Uncompressed | ${formatBytes(baseSize)} | ${formatBytes(totalSize)} | ${formatDiff(diffSize)} | ${diffPercent}% |
+            | Gzipped | ${formatBytes(baseGzip)} | ${formatBytes(totalGzip)} | ${formatDiff(diffGzip)} | - |
+
+            ### Vendor Chunks
+            - **react-vendor:** ${formatBytes(${{ steps.bundle-size.outputs.react_vendor }})}
+            - **ui-vendor:** ${formatBytes(${{ steps.bundle-size.outputs.ui_vendor }})}
+            - **chart-vendor:** ${formatBytes(${{ steps.bundle-size.outputs.chart_vendor }})}
+
+            ${diffPercent > 10 ? '⚠️ **Warning:** Bundle size increased by more than 10%!' : ''}
+            ${diffPercent < -10 ? '🎉 **Great job!** Bundle size decreased by more than 10%!' : ''}
+
+            ---
+            📊 [View detailed analysis](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Upload bundle stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats
+          path: apps/dashboard/dist/stats.html
+          retention-days: 30
+
+      - name: Update bundle size badge (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: your-gist-id-here
+          filename: bundle-size.json
+          label: Bundle Size
+          message: ${{ steps.bundle-size.outputs.total_gzip | numfmt --to=iec-i --suffix=B }}
+          color: brightgreen
+
+  lighthouse:
+    name: Lighthouse Performance
+    runs-on: ubuntu-latest
+    needs: analyze
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build dashboard
+        working-directory: apps/dashboard
+        run: pnpm run build
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            http://localhost:5173
+          configPath: './apps/dashboard/lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true

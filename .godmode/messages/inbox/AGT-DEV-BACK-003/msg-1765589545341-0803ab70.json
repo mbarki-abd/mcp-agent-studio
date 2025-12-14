@@ -1,0 +1,26 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589545341-0803ab70",
+  "from": "GRAND-MAITRE",
+  "to": "AGT-DEV-BACK-003",
+  "timestamp": "2025-12-13T01:32:25.341Z",
+  "intent": "TASK_ASSIGN",
+  "priority": "HIGH",
+  "payload": {
+    "taskId": "TASK-050",
+    "title": "Implémenter système de cache Redis",
+    "description": "Créer une couche de cache avec Redis pour améliorer les performances",
+    "requirements": [
+      "Connexion Redis",
+      "Cache pour requêtes DB",
+      "TTL configurable",
+      "Invalidation du cache"
+    ],
+    "deadline": "2025-12-18T01:32:25.341Z"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": null,
+  "status": "unread"
+}

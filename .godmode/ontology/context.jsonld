@@ -1,0 +1,64 @@
+{
+  "@context": {
+    "@vocab": "https://godmode.dev/ontology/v1#",
+    "gm": "https://godmode.dev/ontology/v1#",
+    "schema": "https://schema.org/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+
+    "Module": "gm:Module",
+    "Function": "gm:Function",
+    "Entity": "gm:Entity",
+    "Flow": "gm:Flow",
+    "Constraint": "gm:Constraint",
+    "Event": "gm:Event",
+    "Agent": "gm:Agent",
+    "Task": "gm:Task",
+    "Message": "gm:Message",
+
+    "id": "@id",
+    "type": "@type",
+
+    "name": "schema:name",
+    "description": "schema:description",
+    "version": "schema:version",
+    "dateCreated": "schema:dateCreated",
+    "dateModified": "schema:dateModified",
+
+    "depends": {"@id": "gm:depends", "@type": "@id", "@container": "@set"},
+    "exports": {"@id": "gm:exports", "@type": "@id", "@container": "@set"},
+    "imports": {"@id": "gm:imports", "@type": "@id", "@container": "@set"},
+
+    "calls": {"@id": "gm:calls", "@type": "@id"},
+    "returns": {"@id": "gm:returns", "@type": "@id"},
+    "emits": {"@id": "gm:emits", "@type": "@id"},
+    "throws": {"@id": "gm:throws", "@type": "@id"},
+
+    "input": "gm:input",
+    "output": "gm:output",
+    "errors": {"@id": "gm:errors", "@container": "@set"},
+
+    "flow": {"@id": "gm:flow", "@container": "@list"},
+    "constraints": {"@id": "gm:constraints", "@container": "@set"},
+
+    "entities": {"@id": "gm:entities", "@container": "@set"},
+    "functions": {"@id": "gm:functions", "@container": "@set"},
+    "events": {"@id": "gm:events", "@container": "@set"},
+
+    "from": {"@id": "gm:from", "@type": "@id"},
+    "to": {"@id": "gm:to", "@type": "@id"},
+    "payload": "gm:payload",
+    "intent": "gm:intent",
+    "priority": "gm:priority",
+    "timestamp": {"@id": "gm:timestamp", "@type": "xsd:dateTime"},
+
+    "delta": "gm:delta",
+    "added": {"@id": "gm:added", "@container": "@set"},
+    "modified": {"@id": "gm:modified", "@container": "@set"},
+    "removed": {"@id": "gm:removed", "@container": "@set"},
+
+    "metrics": "gm:metrics",
+    "tokensOriginal": "gm:tokensOriginal",
+    "tokensCompressed": "gm:tokensCompressed",
+    "compressionRatio": "gm:compressionRatio"
+  }
+}

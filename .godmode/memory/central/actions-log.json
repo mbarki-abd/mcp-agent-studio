@@ -1,0 +1,78 @@
+{
+  "actions": [
+    {
+      "timestamp": "2025-12-13T01:41:29.954Z",
+      "type": "MESSAGE",
+      "subtype": "ARCHIVE",
+      "details": {
+        "action": "RUN_ARCHIVE",
+        "priority": "LOW"
+      },
+      "success": true,
+      "error": "[DRY-RUN] Archivage des anciens messages"
+    },
+    {
+      "timestamp": "2025-12-13T01:41:29.956Z",
+      "type": "ACTIVITY",
+      "subtype": "ALERT",
+      "details": {
+        "type": "INFO",
+        "message": "Activité élevée détectée",
+        "action": "MONITOR_INTENSIVE",
+        "priority": "LOW"
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "timestamp": "2025-12-13T01:41:29.957Z",
+      "type": "MESSAGE",
+      "subtype": "NOTIFY",
+      "details": {
+        "count": 1,
+        "reason": "Messages CRITICAL non lus",
+        "action": "NOTIFY_CRITICAL",
+        "priority": "CRITICAL"
+      },
+      "success": true,
+      "error": "[DRY-RUN] Notification: 1 messages CRITICAL"
+    },
+    {
+      "timestamp": "2025-12-13T01:41:42.457Z",
+      "type": "MESSAGE",
+      "subtype": "ARCHIVE",
+      "details": {
+        "action": "RUN_ARCHIVE",
+        "priority": "LOW"
+      },
+      "success": true,
+      "error": "0 message(s) archivé(s)"
+    },
+    {
+      "timestamp": "2025-12-13T01:41:42.461Z",
+      "type": "ACTIVITY",
+      "subtype": "ALERT",
+      "details": {
+        "type": "INFO",
+        "message": "Activité élevée détectée",
+        "action": "MONITOR_INTENSIVE",
+        "priority": "LOW"
+      },
+      "success": true,
+      "error": null
+    },
+    {
+      "timestamp": "2025-12-13T01:41:42.464Z",
+      "type": "MESSAGE",
+      "subtype": "NOTIFY",
+      "details": {
+        "count": 1,
+        "reason": "Messages CRITICAL non lus",
+        "action": "NOTIFY_CRITICAL",
+        "priority": "CRITICAL"
+      },
+      "success": true,
+      "error": "1 messages CRITICAL non lus détectés"
+    }
+  ]
+}

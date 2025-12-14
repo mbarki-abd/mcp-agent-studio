@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "agent_id": "EXAMPLE-AGENT-001",
+  "last_updated": "2025-12-13T00:00:00Z",
+  "learnings": [
+    {
+      "timestamp": "2025-12-10T12:00:00Z",
+      "type": "TECHNICAL",
+      "category": "NESTJS",
+      "content": "Les modules NestJS nécessitent l'import explicite des dépendances",
+      "context": "Résolution d'erreur lors de la création du users.module.ts",
+      "impact": "MEDIUM",
+      "tags": ["nestjs", "modules", "dependency-injection"]
+    },
+    {
+      "timestamp": "2025-12-10T15:30:00Z",
+      "type": "BEST_PRACTICE",
+      "category": "API_DESIGN",
+      "content": "Utiliser DTOs avec class-validator pour validation automatique",
+      "context": "Implémentation du contrôleur avec validation des entrées",
+      "impact": "HIGH",
+      "tags": ["api", "validation", "dto", "class-validator"]
+    },
+    {
+      "timestamp": "2025-12-11T11:00:00Z",
+      "type": "TECHNICAL",
+      "category": "DATABASE",
+      "content": "Repository pattern avec TypeORM simplifie les requêtes complexes",
+      "context": "Implémentation du service avec accès base de données",
+      "impact": "HIGH",
+      "tags": ["database", "typeorm", "repository-pattern"]
+    },
+    {
+      "timestamp": "2025-12-11T17:00:00Z",
+      "type": "TESTING",
+      "category": "UNIT_TESTS",
+      "content": "Mock des repositories avec jest.mock() pour isoler les tests",
+      "context": "Création des tests unitaires pour le service",
+      "impact": "HIGH",
+      "tags": ["testing", "jest", "mocking", "unit-tests"]
+    },
+    {
+      "timestamp": "2025-12-12T09:00:00Z",
+      "type": "PROCESS",
+      "category": "CODE_REVIEW",
+      "content": "Les tests end-to-end devraient être créés par un agent QA-E2E spécialisé",
+      "context": "Recommandation pour la suite du projet",
+      "impact": "MEDIUM",
+      "tags": ["process", "testing", "delegation", "e2e"]
+    },
+    {
+      "timestamp": "2025-12-12T11:30:00Z",
+      "type": "PATTERN",
+      "category": "ERROR_HANDLING",
+      "content": "Utiliser HttpException de NestJS pour des erreurs HTTP cohérentes",
+      "context": "Gestion des erreurs dans le contrôleur",
+      "impact": "MEDIUM",
+      "tags": ["error-handling", "nestjs", "http"]
+    },
+    {
+      "timestamp": "2025-12-13T00:00:00Z",
+      "type": "REFLECTION",
+      "category": "MISSION",
+      "content": "Mission réussie - CRUD complet avec tests et documentation. Qualité code: excellente. Temps: respecté.",
+      "context": "Bilan final de la mission",
+      "impact": "HIGH",
+      "tags": ["mission-complete", "success", "quality"]
+    }
+  ]
+}

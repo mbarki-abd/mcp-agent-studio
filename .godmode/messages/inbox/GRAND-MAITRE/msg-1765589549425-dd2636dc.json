@@ -1,0 +1,29 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589549425-dd2636dc",
+  "from": "AGT-DEV-BACK-003",
+  "to": "GRAND-MAITRE",
+  "timestamp": "2025-12-13T01:32:29.425Z",
+  "intent": "ERROR_REPORT",
+  "priority": "CRITICAL",
+  "payload": {
+    "severity": "HIGH",
+    "component": "cache/redis",
+    "error": {
+      "type": "ConnectionError",
+      "message": "Redis connection refused",
+      "stack": "at RedisClient.connect (cache.js:23)",
+      "context": {
+        "host": "localhost",
+        "port": 6379
+      }
+    },
+    "impact": "Cache non disponible, performance dégradée",
+    "suggestedAction": "Vérifier que Redis est démarré"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": null,
+  "status": "unread"
+}

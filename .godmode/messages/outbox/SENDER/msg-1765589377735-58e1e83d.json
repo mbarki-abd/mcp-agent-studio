@@ -1,0 +1,17 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589377735-58e1e83d",
+  "from": "SENDER",
+  "to": "RECEIVER-TEST",
+  "timestamp": "2025-12-13T01:29:37.735Z",
+  "intent": "TASK_PROGRESS",
+  "priority": "NORMAL",
+  "payload": {
+    "id": 2
+  },
+  "delta": null,
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

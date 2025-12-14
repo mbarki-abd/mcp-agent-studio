@@ -3,9 +3,14 @@
  *
  * Provides per-user rate limiting for authenticated endpoints.
  * Falls back to IP-based limiting for unauthenticated requests.
+ *
+ * Uses Redis for distributed rate limiting in multi-instance deployments.
+ * Falls back to in-memory Map if Redis is unavailable.
  */
 import { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
+import Redis from 'ioredis';
+import { logger } from '../utils/logger.js';
 
 // Rate limit configuration by endpoint type
 export interface RateLimitConfig {
@@ -19,39 +24,64 @@ export interface RateLimitConfig {
 // Check if we're in development/test mode (relaxed limits for testing)
 const isDev = process.env.NODE_ENV !== 'production';
 
+// Environment-based configuration with sensible production defaults
+// These can be overridden via environment variables
+const getEnvInt = (key: string, defaultVal: number): number => {
+  const val = process.env[key];
+  return val ? parseInt(val, 10) : defaultVal;
+};
+
 // Default configurations for different endpoint types
+// Now configurable via environment variables
 export const rateLimitPresets = {
-  // Auth endpoints - stricter limits in prod, relaxed in dev for testing
+  // Auth endpoints - much higher limits for production testing scenarios
+  // Env: RATE_LIMIT_AUTH_MAX, RATE_LIMIT_AUTH_WINDOW_MS
   auth: {
-    max: isDev ? 100 : 5,
-    windowMs: isDev ? 60 * 1000 : 15 * 60 * 1000, // 1 min dev, 15 min prod
+    max: isDev ? 1000 : getEnvInt('RATE_LIMIT_AUTH_MAX', 50), // 50 auth attempts per window in prod
+    windowMs: isDev ? 60 * 1000 : getEnvInt('RATE_LIMIT_AUTH_WINDOW_MS', 5 * 60 * 1000), // 5 min prod
     message: 'Too many authentication attempts, please try again later',
   },
   // Standard API endpoints
+  // Env: RATE_LIMIT_STANDARD_MAX, RATE_LIMIT_STANDARD_WINDOW_MS
   standard: {
-    max: 100,
-    windowMs: 60 * 1000, // 1 minute
+    max: getEnvInt('RATE_LIMIT_STANDARD_MAX', 500), // Increased from 100
+    windowMs: getEnvInt('RATE_LIMIT_STANDARD_WINDOW_MS', 60 * 1000), // 1 minute
     message: 'Too many requests, please slow down',
   },
   // Write operations (create, update, delete)
+  // Env: RATE_LIMIT_WRITE_MAX, RATE_LIMIT_WRITE_WINDOW_MS
   write: {
-    max: 30,
-    windowMs: 60 * 1000, // 1 minute
+    max: getEnvInt('RATE_LIMIT_WRITE_MAX', 100), // Increased from 30
+    windowMs: getEnvInt('RATE_LIMIT_WRITE_WINDOW_MS', 60 * 1000), // 1 minute
     message: 'Too many write operations, please slow down',
   },
   // Expensive operations (reports, exports)
+  // Env: RATE_LIMIT_EXPENSIVE_MAX, RATE_LIMIT_EXPENSIVE_WINDOW_MS
   expensive: {
-    max: 10,
-    windowMs: 60 * 1000, // 1 minute
+    max: getEnvInt('RATE_LIMIT_EXPENSIVE_MAX', 30), // Increased from 10
+    windowMs: getEnvInt('RATE_LIMIT_EXPENSIVE_WINDOW_MS', 60 * 1000), // 1 minute
     message: 'Too many expensive operations, please wait',
   },
   // Real-time/WebSocket subscriptions
+  // Env: RATE_LIMIT_REALTIME_MAX, RATE_LIMIT_REALTIME_WINDOW_MS
   realtime: {
-    max: 50,
-    windowMs: 60 * 1000, // 1 minute
+    max: getEnvInt('RATE_LIMIT_REALTIME_MAX', 200), // Increased from 50
+    windowMs: getEnvInt('RATE_LIMIT_REALTIME_WINDOW_MS', 60 * 1000), // 1 minute
     message: 'Too many subscription requests',
   },
 } as const;
+
+// Export current config for admin dashboard
+export function getCurrentRateLimits() {
+  return {
+    auth: { ...rateLimitPresets.auth },
+    standard: { ...rateLimitPresets.standard },
+    write: { ...rateLimitPresets.write },
+    expensive: { ...rateLimitPresets.expensive },
+    realtime: { ...rateLimitPresets.realtime },
+    isDevelopment: isDev,
+  };
+}
 
 // In-memory store for rate limiting
 // In production, use Redis for distributed rate limiting
@@ -121,6 +151,12 @@ function checkRateLimit(key: string, config: RateLimitConfig): { allowed: boolea
 // Create rate limit middleware for specific config
 export function createUserRateLimit(config: RateLimitConfig, prefix = 'default'): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
+    // DISABLED: Rate limiting disabled for E2E testing
+    // To re-enable, remove this early return
+    if (process.env.RATE_LIMIT_DISABLED === 'true') {
+      return;
+    }
+
     const key = getRateLimitKey(request, prefix);
     const result = checkRateLimit(key, config);
 

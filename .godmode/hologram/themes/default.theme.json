@@ -1,0 +1,50 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "HologramTheme",
+  "name": "default",
+  "version": "1.0",
+
+  "colors": {
+    "nexus": {
+      "idle": "#7B68EE",
+      "active": "#00FF88",
+      "intense": "#FFD700",
+      "alert": "#FF4444",
+      "transcendance": "#FFFFFF"
+    },
+    "aura": {
+      "serenite": "#87CEEB",
+      "curiosite": "#9370DB",
+      "satisfaction": "#98FB98",
+      "determination": "#FFA500",
+      "inquietude": "#FFB6C1",
+      "alerte": "#FF6347"
+    },
+    "energie": {
+      "messages": "#00BFFF",
+      "taches": "#FFD700",
+      "karma_positive": "#00FF00",
+      "karma_negative": "#FF0000"
+    },
+    "agents": {
+      "active": "#00FF00",
+      "working": "#FFFF00",
+      "error": "#FF0000",
+      "standby": "#808080"
+    }
+  },
+
+  "effects": {
+    "glow_intensity": 0.8,
+    "pulse_speed": 1.0,
+    "rotation_speed": 0.5,
+    "particle_density": 1.0,
+    "trail_length": 20
+  },
+
+  "background": {
+    "color": "#0a0a1a",
+    "stars": true,
+    "nebula": false
+  }
+}

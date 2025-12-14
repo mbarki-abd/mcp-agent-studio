@@ -1,0 +1,22 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589548419-5e032f90",
+  "from": "AGT-DEV-BACK-003",
+  "to": "AGT-LEAD-BACK-001",
+  "timestamp": "2025-12-13T01:32:28.419Z",
+  "intent": "QUERY_SPEC",
+  "priority": "NORMAL",
+  "payload": {
+    "module": "cache",
+    "questions": [
+      "Quelle est la stratégie d'invalidation recommandée?",
+      "Faut-il un cache multi-niveaux?"
+    ],
+    "context": "Implémentation du système de cache Redis"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": null,
+  "status": "unread"
+}

@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "agent_id": "EXAMPLE-AGENT-001",
+  "last_updated": "2025-12-13T00:00:00Z",
+  "entries": [
+    {
+      "timestamp": "2025-12-10T10:00:00Z",
+      "action": "CREATED",
+      "details": {
+        "profile": "AGT-DEV-BACK-NODE",
+        "mission": "Implémenter API Users avec CRUD complet",
+        "superior": "AGT-LEAD-BACK-001"
+      }
+    },
+    {
+      "timestamp": "2025-12-10T11:30:00Z",
+      "action": "FILE_CREATED",
+      "details": {
+        "file": "src/backend/users/users.module.ts",
+        "lines": 45,
+        "description": "Module NestJS pour les utilisateurs"
+      }
+    },
+    {
+      "timestamp": "2025-12-10T14:00:00Z",
+      "action": "FILE_CREATED",
+      "details": {
+        "file": "src/backend/users/users.controller.ts",
+        "lines": 120,
+        "description": "Contrôleur REST avec CRUD complet"
+      }
+    },
+    {
+      "timestamp": "2025-12-11T09:00:00Z",
+      "action": "FILE_CREATED",
+      "details": {
+        "file": "src/backend/users/users.service.ts",
+        "lines": 200,
+        "description": "Service métier avec logique CRUD"
+      }
+    },
+    {
+      "timestamp": "2025-12-11T16:00:00Z",
+      "action": "TESTS_CREATED",
+      "details": {
+        "files": [
+          "tests/unit/users/users.controller.spec.ts",
+          "tests/unit/users/users.service.spec.ts"
+        ],
+        "total_tests": 24,
+        "coverage": 96
+      }
+    },
+    {
+      "timestamp": "2025-12-12T10:00:00Z",
+      "action": "KARMA_AWARDED",
+      "details": {
+        "reason": "Tests passing avec excellente couverture",
+        "points": 50,
+        "total_karma": 150
+      }
+    },
+    {
+      "timestamp": "2025-12-13T00:00:00Z",
+      "action": "DISSOLVED",
+      "details": {
+        "reason": "Mission accomplie",
+        "final_karma": 150,
+        "deliverables_count": 4
+      }
+    }
+  ]
+}

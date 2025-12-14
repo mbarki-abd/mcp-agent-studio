@@ -1,0 +1,67 @@
+{
+  "version": "3.1",
+  "last_updated": "2025-12-13T00:00:00Z",
+
+  "grand_maitre": {
+    "id": "GRAND-MAITRE",
+    "status": "ACTIVE",
+    "type": "DAEMON",
+    "authority": "ROOT_ABSOLUTE",
+    "karma": 1000,
+    "karma_level": "DIVINE",
+    "created_at": "2024-12-12T00:00:00Z",
+    "statistics": {
+      "decisions_made": 3,
+      "agents_recruited": 3,
+      "agents_dissolved": 1,
+      "decrees_issued": 1,
+      "orders_issued": 10,
+      "cycles_completed": 100
+    }
+  },
+
+  "agents": {},
+
+  "archived_agents": {},
+
+  "hierarchy": {
+    "GRAND-MAITRE": {
+      "children": []
+    }
+  },
+
+  "karma_leaderboard": [],
+
+  "hall_of_fame": [
+    {
+      "id": "GODMODE-FRAMEWORK",
+      "achievement": "Framework v3.1 CLI_PURE Released",
+      "date": "2025-12-13T00:00:00Z"
+    }
+  ],
+
+  "blacklist": [],
+
+  "next_agent_sequence": {
+    "STRAT": 1,
+    "LEAD": 1,
+    "DEV": 1,
+    "QA": 1,
+    "DATA": 1,
+    "ML": 1,
+    "DEVOPS": 1,
+    "OTHER": 1
+  },
+
+  "available_profiles": [
+    "STRAT-ARCH",
+    "LEAD-BACK",
+    "LEAD-FRONT",
+    "DEV-BACK-NODE",
+    "DEV-FRONT-REACT",
+    "QA-UNIT",
+    "QA-PERF",
+    "SEC-AUDIT",
+    "DOC-TECH"
+  ]
+}

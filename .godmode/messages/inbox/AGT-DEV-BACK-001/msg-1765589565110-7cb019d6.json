@@ -1,0 +1,18 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589565110-7cb019d6",
+  "from": "GRAND-MAITRE",
+  "to": "AGT-DEV-BACK-001",
+  "timestamp": "2025-12-13T01:32:45.111Z",
+  "intent": "TASK_ASSIGN",
+  "priority": "NORMAL",
+  "payload": {
+    "task": "Test message system",
+    "priority": "HIGH"
+  },
+  "delta": null,
+  "requiresResponse": false,
+  "deadline": null,
+  "status": "unread"
+}

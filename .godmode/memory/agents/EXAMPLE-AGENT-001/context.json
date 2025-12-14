@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "agent_id": "EXAMPLE-AGENT-001",
+  "last_updated": "2025-12-13T00:00:00Z",
+  "state": {
+    "status": "ARCHIVED",
+    "currentTask": "Implémenter API Users",
+    "karma": 150,
+    "metadata": {
+      "profile": "AGT-DEV-BACK-NODE",
+      "tier": 2,
+      "created_at": "2025-12-10T10:00:00Z",
+      "dissolved_at": "2025-12-13T00:00:00Z",
+      "dissolution_reason": "Mission accomplie",
+      "finalState": {
+        "completion_rate": 100,
+        "quality_score": 95,
+        "tests_passed": true
+      },
+      "deliverables": [
+        "src/backend/users/users.module.ts",
+        "src/backend/users/users.controller.ts",
+        "src/backend/users/users.service.ts",
+        "tests/unit/users/*.spec.ts"
+      ]
+    }
+  }
+}

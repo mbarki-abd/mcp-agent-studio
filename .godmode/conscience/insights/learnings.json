@@ -1,0 +1,49 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "LearningRepository",
+  "version": "1.0",
+  "created": "2025-12-13T00:00:00Z",
+  "learnings": [
+    {
+      "timestamp": "2025-12-13T00:00:00Z",
+      "pattern": {
+        "type": "AGENT_RECRUITMENT",
+        "conditions": {
+          "project_type": "backend",
+          "complexity": "medium"
+        },
+        "frequency": 1
+      },
+      "outcome": {
+        "success": true,
+        "metrics": {
+          "completion_time": "30min",
+          "quality_score": 85
+        },
+        "impact": "MEDIUM"
+      },
+      "lesson": "Quand AGENT_RECRUITMENT dans les conditions {\"project_type\":\"backend\",\"complexity\":\"medium\"}, le succès est probable.",
+      "confidence": 65
+    },
+    {
+      "timestamp": "2025-12-13T19:59:52.735Z",
+      "pattern": {
+        "type": "AGENT_RECRUITMENT",
+        "conditions": {
+          "project_type": "backend",
+          "complexity": "low"
+        },
+        "frequency": 3
+      },
+      "outcome": {
+        "success": true,
+        "metrics": {
+          "time": "5s"
+        },
+        "impact": "MEDIUM"
+      },
+      "lesson": "Quand AGENT_RECRUITMENT dans les conditions {\"project_type\":\"backend\",\"complexity\":\"low\"}, le succès est probable.",
+      "confidence": 65
+    }
+  ]
+}

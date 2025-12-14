@@ -1,0 +1,26 @@
+{
+  "@context": "https://godmode.dev/ontology/v1",
+  "@type": "Message",
+  "id": "msg-1765589161739-290afd6f",
+  "from": "GRAND-MAITRE",
+  "to": "AGT-DEV-BACK-002",
+  "timestamp": "2025-12-13T01:26:01.739Z",
+  "intent": "TASK_ASSIGN",
+  "priority": "HIGH",
+  "payload": {
+    "taskId": "TASK-003",
+    "title": "Implémenter système de messages inter-agents",
+    "description": "Créer le système de messages utilisant le protocole CGP",
+    "requirements": [
+      "Format JSON-LD",
+      "Queue de messages",
+      "CLI pour tests",
+      "Compression sémantique"
+    ],
+    "deadline": "2025-12-20T01:26:01.737Z"
+  },
+  "delta": null,
+  "requiresResponse": true,
+  "deadline": "2025-12-20T01:26:01.738Z",
+  "status": "unread"
+}
